@@ -28,7 +28,7 @@ function hashSeed(input: string): number {
  */
 export default function Waveform({
   seed,
-  bars = 48,
+  bars = 36,
   progress = 0,
   className = '',
 }: {
@@ -51,15 +51,15 @@ export default function Waveform({
 
   return (
     <div
-      className={`flex items-center gap-[2px] ${className}`}
+      className={`flex min-w-0 items-center gap-px overflow-hidden ${className}`}
       role="img"
       aria-label="Audio waveform"
     >
       {heights.map((h, i) => (
         <span
           key={i}
-          className={`w-[3px] rounded-full transition-colors ${i < played ? 'bg-accent' : 'bg-line'}`}
-          style={{ height: `${Math.round(h * 28)}px` }}
+          className={`min-w-[2px] flex-1 rounded-full transition-colors ${i < played ? 'bg-accent' : 'bg-accent/30'}`}
+          style={{ height: `${Math.round(h * 28)}px`, maxWidth: '6px' }}
         />
       ))}
     </div>

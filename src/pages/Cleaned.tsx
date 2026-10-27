@@ -6,7 +6,7 @@ import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
 import { btnNeutral } from '../components/ui';
-import { canEditFolder } from '../store/auth';
+import { canEditFolder, useSession } from '../store/auth';
 
 /**
  * The human-corrected subset (instruction.txt #8). The badge is the filter:
@@ -14,6 +14,7 @@ import { canEditFolder } from '../store/auth';
  * trustworthy.
  */
 export default function Cleaned() {
+  const session = useSession();
   const [cards, setCards] = useState<DataCardModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export default function Cleaned() {
             <DataCardView
               key={card.video_id}
               card={card}
-              canEdit={canEditFolder(card.folder_id ?? '')}
+              canEdit={canEditFolder(session, card.folder_id ?? '')}
               onChanged={() => undefined}
               onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
             />

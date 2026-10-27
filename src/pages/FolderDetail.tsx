@@ -6,7 +6,7 @@ import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
 import { btnNeutral, btnPrimary } from '../components/ui';
-import { canEditFolder } from '../store/auth';
+import { canEditFolder, useSession } from '../store/auth';
 
 /**
  * One folder: its units as cards, its sub-folders, and the ZIP export that
@@ -14,10 +14,15 @@ import { canEditFolder } from '../store/auth';
  */
 export default function FolderDetail() {
   const { id = '' } = useParams();
+  const session = useSession();
   const [folder, setFolder] = useState<PublicFolder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zipping, setZipping] = useState(false);
+  // A 404 from this route means one of two things: the folder does not exist, or
+  // it is private and the caller has no token. Only the second case may be
+  // advertised, so the door is offered only once the folder is known to exist.
+  const [exists, setExists] = useState(false);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -25,7 +30,10 @@ export default function FolderDetail() {
     setError(null);
     getPublicFolder(id)
       .then((res) => {
-        if (!cancelled) setFolder(res);
+        if (!cancelled) {
+          setFolder(res);
+          setExists(true);
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message);
@@ -61,14 +69,26 @@ export default function FolderDetail() {
   }
 
   if (error || !folder) {
+    const known = exists && error !== null;
     return (
       <div className="mx-auto max-w-content px-4 py-10 sm:px-6">
         <EmptyState
           title="This folder isn't available"
           action={
-            <Link to="/" className={btnNeutral}>
-              Back to the dataset
-            </Link>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link to="/" className={btnNeutral}>
+                Back to the dataset
+              </Link>
+              {/* Only offered for a folder the visitor can already read, which is
+                  how a share token leaves them: the folder is visible to them,
+                  so pointing at its door leaks nothing an attacker cannot learn
+                  by guessing ids. A genuinely unknown id gets no door at all. */}
+              {known ? (
+                <Link to={`/passcode?folder=${id}`} className={btnPrimary}>
+                  Have a passcode?
+                </Link>
+              ) : null}
+            </div>
           }
         >
           {error ?? 'It may be private. Unlock it with the passcode or link the owner shared.'}
@@ -77,7 +97,7 @@ export default function FolderDetail() {
     );
   }
 
-  const editable = canEditFolder(folder.id);
+  const editable = canEditFolder(session, folder.id);
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">

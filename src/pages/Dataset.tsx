@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { listCards, listPublicFolders } from '../api/client';
 import type { DataCard as DataCardModel, PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import FolderTree from '../components/FolderTree';
 import Spinner from '../components/Spinner';
-import { canEditFolder } from '../store/auth';
+import { btnNeutral } from '../components/ui';
+import { canEditFolder, useSession } from '../store/auth';
 
 /**
  * The public dataset: everything a visitor may read, organised by folder and
@@ -16,6 +17,7 @@ import { canEditFolder } from '../store/auth';
 export default function Dataset() {
   const [params] = useSearchParams();
   const q = params.get('q') ?? '';
+  const session = useSession();
 
   const [folders, setFolders] = useState<PublicFolder[]>([]);
   const [cards, setCards] = useState<DataCardModel[]>([]);
@@ -54,12 +56,24 @@ export default function Dataset() {
         <div className="card p-2">
           {loading ? <Spinner label="Loading folders…" className="p-2" /> : <FolderTree nodes={folders} />}
         </div>
+
+        {/* The passcode door, reachable from the page the console advertises it
+            on. It names no folder: a visitor with a code picks which one it
+            opens, and an anonymous caller learns nothing. */}
+        <div className="card mt-3 p-3">
+          <p className="text-xs text-dim">
+            Private folder? The owner can give you a passcode instead of an invite.
+          </p>
+          <Link to="/passcode" className={`${btnNeutral} mt-2 w-full`}>
+            Have a passcode?
+          </Link>
+        </div>
       </aside>
 
       <section className="min-w-0">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h1 className="font-display text-2xl font-bold text-fg">
-            {q ? `Results for “${q}”` : 'My Folder'}
+            {q ? `Results for “${q}”` : 'All units'}
           </h1>
           <span className="font-mono text-xs text-faint">{total} units</span>
         </div>
@@ -80,7 +94,7 @@ export default function Dataset() {
               <DataCardView
                 key={card.video_id}
                 card={card}
-                canEdit={canEditFolder(card.folder_id ?? '')}
+                canEdit={canEditFolder(session, card.folder_id ?? '')}
                 onChanged={() => undefined}
                 onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
               />
