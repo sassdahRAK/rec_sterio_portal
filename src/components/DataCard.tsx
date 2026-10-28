@@ -104,8 +104,11 @@ export default function DataCardView({
 
   const title = card.title || card.folder_name || 'Untitled clip';
 
+  // min-w-0 lets the grid track shrink below the card's min-content width
+  // (the truncated title is nowrap, so its min-content is the full title);
+  // without it the card pushes 90px of horizontal scroll at 360px.
   return (
-    <article className="card flex flex-col gap-4 p-5 animate-fade-up">
+    <article className="card flex min-w-0 flex-col gap-4 p-5 animate-fade-up">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate font-display text-base font-semibold text-fg" title={title}>

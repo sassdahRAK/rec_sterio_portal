@@ -176,7 +176,10 @@ export default function Passcode() {
 
         <p className="mt-3 text-center text-xs text-faint">
           Opened this folder before?{' '}
-          <Link to={`/folder/${folderId}`} className="text-accent hover:underline">
+          <Link
+            to={`/folder/${folderId}`}
+            className="tap-pad inline-flex items-center rounded px-1 text-accent hover:underline"
+          >
             Go to it directly
           </Link>
         </p>

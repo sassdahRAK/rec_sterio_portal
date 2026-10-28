@@ -6,7 +6,7 @@ export const inputCls =
   'disabled:opacity-50';
 
 export const btnBase =
-  'inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ' +
+  'tap-pad inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ' +
   'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ' +
   'disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -23,5 +23,5 @@ export const labelCls =
   'mb-1.5 block text-2xs font-semibold uppercase tracking-[0.14em] text-faint';
 
 export const iconBtn =
-  'inline-flex h-8 w-8 items-center justify-center rounded-md text-dim transition-colors ' +
+  'tap-pad inline-flex h-8 w-8 items-center justify-center rounded-md text-dim transition-colors ' +
   'hover:bg-surface-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50';

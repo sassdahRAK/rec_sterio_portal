@@ -38,9 +38,9 @@ export default function Share() {
   return (
     <div className="mx-auto flex max-w-content flex-col items-center px-4 py-16 sm:px-6">
       {error ? (
-        <div className="card max-w-md p-6 text-center">
+        <div className="card w-full max-w-md p-6 text-center">
           <h1 className="font-display text-lg font-semibold text-fg">This link isn't valid</h1>
-          <p className="mt-2 text-sm text-dim">
+          <p className="mt-2 break-words text-sm text-dim">
             {error} It may have expired or been revoked by the owner.
           </p>
         </div>

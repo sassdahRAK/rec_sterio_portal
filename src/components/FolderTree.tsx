@@ -14,7 +14,7 @@ export default function FolderTree({ nodes }: { nodes: PublicFolder[] }) {
         <li key={node.id}>
           <Link
             to={`/folder/${node.id}`}
-            className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-dim transition-colors hover:bg-surface-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+            className="tap-pad group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-dim transition-colors hover:bg-surface-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
           >
             <FolderIcon className="shrink-0 text-faint transition-colors group-hover:text-accent" />
             <span className="truncate">{node.name}</span>

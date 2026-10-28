@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { listCards, listPublicFolders } from '../api/client';
 import type { DataCard as DataCardModel, PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
@@ -10,6 +10,17 @@ import { btnNeutral } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
 
+/** Folder tree flattened into picker options; depth shows as indentation. */
+function flattenFolders(
+  nodes: PublicFolder[],
+  depth = 0,
+): { id: string; name: string; depth: number }[] {
+  return nodes.flatMap((n) => [
+    { id: n.id, name: n.name, depth },
+    ...flattenFolders(n.children, depth + 1),
+  ]);
+}
+
 /**
  * The public dataset: everything a visitor may read, organised by folder and
  * shown as cards. This is the page's single job — answer "what is in this
@@ -17,6 +28,7 @@ import { useFolderRoles } from '../lib/access';
  */
 export default function Dataset() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const q = params.get('q') ?? '';
   const session = useSession();
   const folderRoles = useFolderRoles();
@@ -60,12 +72,34 @@ export default function Dataset() {
         <h2 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
           Browse
         </h2>
-        <div className="card p-2">
+        {/* Phones get the whole tree as one picker — the expanded card pushed
+            a screen's worth of links above the first unit. */}
+        <div className="card p-2 sm:hidden">
+          <label htmlFor="folder-picker" className="sr-only">
+            Browse folders
+          </label>
+          <select
+            id="folder-picker"
+            defaultValue=""
+            onChange={(e) => navigate(e.target.value || '/')}
+            className="tap-pad w-full appearance-none rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+          >
+            <option value="">All units · {total}</option>
+            {flattenFolders(folders).map((f) => (
+              <option key={f.id} value={`/folder/${f.id}`}>
+                {'\u00A0\u00A0'.repeat(f.depth)}
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="card hidden p-2 sm:block">
           <NavLink
             to="/"
             end
             className={({ isActive }) =>
-              `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+              `tap-pad flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                 isActive && !q
                   ? 'bg-surface-2 font-semibold text-fg'
                   : 'text-dim hover:bg-surface-2 hover:text-fg'

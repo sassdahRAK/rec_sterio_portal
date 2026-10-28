@@ -37,7 +37,10 @@ export default function App() {
           <p className="text-2xs text-faint">
             RecSterio — Khmer–English speech dataset. Video, audio and transcript, cleaned by hand.
           </p>
-          <p className="font-mono text-2xs text-faint">Media Ingestion &amp; Download Automation</p>
+          {/* Utility tagline — decoration on a phone, information on a desk. */}
+          <p className="hidden font-mono text-2xs text-faint sm:block">
+            Media Ingestion &amp; Download Automation
+          </p>
         </div>
       </footer>
     </div>

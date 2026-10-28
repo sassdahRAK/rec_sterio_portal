@@ -46,7 +46,7 @@ export default function Header() {
       <div className="mx-auto flex max-w-content items-center gap-3 rounded-full border border-line bg-surface py-1.5 pl-4 pr-1.5 shadow-card">
         <Link
           to="/"
-          className="flex shrink-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+          className="tap-pad flex shrink-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
         >
           <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-7 w-7 rounded-full" />
           <span className="font-display text-lg font-bold tracking-tight text-fg">RecSterio</span>
@@ -110,7 +110,7 @@ export default function Header() {
             to={tab.to}
             end={tab.to === '/'}
             className={({ isActive }) =>
-              `flex-1 rounded-full px-3 py-1.5 text-center text-sm ${
+              `tap-pad flex flex-1 items-center justify-center rounded-full px-3 py-1.5 text-center text-sm ${
                 isActive ? 'bg-surface font-semibold text-fg shadow-card' : 'font-medium text-dim'
               }`
             }

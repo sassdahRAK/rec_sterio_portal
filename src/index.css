@@ -110,6 +110,14 @@
   .card {
     @apply rounded-xl border border-line bg-surface shadow-card;
   }
+
+  /* Touch devices get 44px tap targets without changing the desktop look. */
+  @media (pointer: coarse) {
+    .tap-pad {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
