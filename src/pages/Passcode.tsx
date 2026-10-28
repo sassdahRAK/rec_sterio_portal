@@ -63,7 +63,15 @@ export default function Passcode() {
   }, []);
 
   const options = useMemo(() => flatten(folders), [folders]);
-  const chosen = options.find(({ node }) => node.id === folderId)?.node ?? null;
+  // A private folder is deliberately absent from the public list, so a link
+  // carrying `?folder=<private id>` would leave the select with no matching
+  // option — the visitor would see "Choose a folder…" and have no way to
+  // re-pick the one they were sent to. Keep the requested folder selectable.
+  const selectable = useMemo(() => {
+    if (!folderId || options.some(({ node }) => node.id === folderId)) return options;
+    return [{ node: { id: folderId, name: 'Private folder', visibility: 'private', cards: [], children: [] }, depth: 0 }, ...options];
+  }, [options, folderId]);
+  const chosen = selectable.find(({ node }) => node.id === folderId)?.node ?? null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -123,7 +131,7 @@ export default function Passcode() {
         >
           <option value="">Choose a folder…</option>
           {loading ? <option disabled>Loading folders…</option> : null}
-          {options.map(({ node, depth }) => (
+          {selectable.map(({ node, depth }) => (
             <option key={node.id} value={node.id}>
               {depth > 0 ? `${'— '.repeat(depth)}` : ''}
               {node.name}

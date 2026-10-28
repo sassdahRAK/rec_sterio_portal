@@ -429,9 +429,16 @@ function buildZip(entries: Array<{ name: string; data: Uint8Array }>): Blob {
     const name = encoder.encode(entry.name);
     const crc = crc32(entry.data);
 
-    const local = new DataView(new ArrayBuffer(30 + name.length));
+    // The local header is exactly 30 bytes; the name and data are separate
+    // parts appended after it. Allocating 30+name.length here would insert
+    // zero padding between the header and the name and corrupt the archive.
+    const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
     local.setUint16(4, 20, true);
+    // Bit 11 (0x0800) marks the name as UTF-8. Without it every tool decodes
+    // non-ASCII names as CP437, so "Cafés" extracts as "Caf+?s" and macOS
+    // refuses the entry outright ("Illegal byte sequence").
+    local.setUint16(6, 0x0800, true);
     local.setUint16(8, 0, true); // stored
     local.setUint32(14, crc, true);
     local.setUint32(18, entry.data.length, true);
@@ -440,10 +447,11 @@ function buildZip(entries: Array<{ name: string; data: Uint8Array }>): Blob {
     local.setUint16(28, 0, true);
     chunks.push(new Uint8Array(local.buffer), name, entry.data);
 
-    const dir = new DataView(new ArrayBuffer(46 + name.length));
+    const dir = new DataView(new ArrayBuffer(46));
     dir.setUint32(0, 0x02014b50, true);
     dir.setUint16(4, 20, true);
     dir.setUint16(6, 20, true);
+    dir.setUint16(8, 0x0800, true); // UTF-8 name, matching the local header
     dir.setUint32(16, crc, true);
     dir.setUint32(20, entry.data.length, true);
     dir.setUint32(24, entry.data.length, true);
@@ -600,7 +608,6 @@ export function mockRequest(
   }
   if (rawPath === '/public/passcodes/redeem' && method === 'POST') {
     const payload = (body ?? {}) as { folder_id?: string; code?: string };
-    (window as unknown as { __lastRedeem?: unknown }).__lastRedeem = payload;
     const folder = mockFolders.find((item) => item.id === payload.folder_id);
     // Only F5 has a passcode; every other answer is the uniform 401 the real
     // API gives, so a demo visitor learns nothing about folders that do not
