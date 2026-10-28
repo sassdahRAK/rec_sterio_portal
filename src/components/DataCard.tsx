@@ -15,8 +15,8 @@ import { btnDanger, btnNeutral, btnPrimary, iconBtn, inputCls } from './ui';
 /**
  * One dataset unit: media, audio and transcript, with the Raw/Cleaned badge.
  *
- * This is the page's workhorse and the design's signature surface — the media
- * area sits in a soft crimson halo, and the audio row is a real waveform.
+ * This is the page's workhorse — the media area, a real waveform for the audio
+ * row, and the transcript with its edit affordance.
  */
 export default function DataCardView({
   card,
@@ -105,7 +105,7 @@ export default function DataCardView({
   const title = card.title || card.folder_name || 'Untitled clip';
 
   return (
-    <article className="card halo flex flex-col gap-4 p-5 animate-fade-up">
+    <article className="card flex flex-col gap-4 p-5 animate-fade-up">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate font-display text-base font-semibold text-fg" title={title}>
@@ -135,7 +135,7 @@ export default function DataCardView({
               type="button"
               onClick={togglePlay}
               aria-label={playing ? `Pause ${title}` : `Play ${title}`}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-halo transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/60"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-card transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/60"
             >
               {playing ? <PauseIcon /> : <PlayIcon />}
             </button>

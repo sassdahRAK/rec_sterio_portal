@@ -10,6 +10,7 @@
  *   passcode or share link, so they are fetched as blobs rather than linked
  *   directly (a raw URL would 401 in an `<audio>` element).
  */
+import { MockBlobError, mockBlob, mockRequest } from './mock';
 import type {
   DatasetCardList,
   FolderComment,
@@ -31,6 +32,33 @@ import type {
 export const API_BASE: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ||
   '/api/v1';
+
+/* ------------------------------------------------------------- mock toggle */
+
+export const MOCK_STORAGE_KEY = 'recsterio.portal.mock';
+
+/**
+ * Demo mode: every request is answered from `api/mock.ts` with no network at
+ * all. The same convention the admin console uses — open the portal with
+ * `?mock=1` (persisted to localStorage) or set VITE_USE_MOCK=1.
+ */
+export function isMockEnabled(): boolean {
+  if (String(import.meta.env.VITE_USE_MOCK ?? '') === '1') return true;
+  try {
+    return localStorage.getItem(MOCK_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setMockEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(MOCK_STORAGE_KEY, '1');
+    else localStorage.removeItem(MOCK_STORAGE_KEY);
+  } catch {
+    /* storage unavailable — demo mode stays off */
+  }
+}
 
 export class ApiError extends Error {
   readonly code: string;
@@ -98,6 +126,22 @@ async function parseError(res: Response): Promise<never> {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = currentToken();
+  if (isMockEnabled()) {
+    const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+    const result = mockRequest(init.method ?? 'GET', path, body, token);
+    if (result.status >= 400) {
+      const envelope = result.data as {
+        error?: { code?: string; message?: string; details?: unknown };
+      };
+      throw new ApiError(
+        envelope?.error?.code ?? 'request_failed',
+        envelope?.error?.message ?? `Request failed (${result.status}).`,
+        result.status,
+        envelope?.error?.details ?? null,
+      );
+    }
+    return result.data as T;
+  }
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
@@ -240,6 +284,16 @@ export const listFolders = (): Promise<{ items: FolderSummary[]; total: number }
  */
 async function fetchBlob(path: string): Promise<Blob> {
   const token = currentToken();
+  if (isMockEnabled()) {
+    try {
+      return mockBlob(path, token);
+    } catch (err) {
+      if (err instanceof MockBlobError) {
+        throw new ApiError(err.code, err.message, err.status);
+      }
+      throw err;
+    }
+  }
   const headers = new Headers();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const res = await fetch(`${API_BASE}${path}`, { headers });
@@ -273,6 +327,16 @@ export async function downloadAudio(videoId: string, title?: string | null): Pro
 }
 
 /**
+ * Media URLs come back from the API as full paths (`/api/v1/videos/{id}/audio`),
+ * but `fetchBlob` and the streaming branch both want a base-relative one. Strip
+ * a leading base when it is there — otherwise the two get concatenated into
+ * `/api/v1/api/v1/...` and the request 404s.
+ */
+function toApiRelative(url: string): string {
+  return url.startsWith(API_BASE) ? url.slice(API_BASE.length) : url;
+}
+
+/**
  * A URL an `<audio>`/`<video>` element can actually play.
  *
  * With no token the URL is public and streams directly (so the browser can
@@ -281,8 +345,11 @@ export async function downloadAudio(videoId: string, title?: string | null): Pro
  * owns revoking the returned object URL.
  */
 export async function playableMediaUrl(mediaUrl: string): Promise<string> {
+  const path = toApiRelative(mediaUrl);
   const token = currentToken();
-  if (!token) return `${API_BASE}${mediaUrl}`;
-  const blob = await fetchBlob(mediaUrl);
+  // Demo mode has no streamable origin: synthesize the audio as a blob so the
+  // player, the seek bar and the duration all behave like the real thing.
+  if (!token && !isMockEnabled()) return `${API_BASE}${path}`;
+  const blob = await fetchBlob(path);
   return URL.createObjectURL(blob);
 }

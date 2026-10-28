@@ -5,14 +5,16 @@ import ThemeToggle from './ThemeToggle';
 import { btnNeutral } from './ui';
 
 const TABS = [
-  { to: '/scrape', label: 'Audio scrape' },
+  { to: '/scrape', label: 'Auto scrape' },
   { to: '/', label: 'Dataset' },
   { to: '/cleaned', label: 'Cleaned' },
 ];
 
 /**
- * The portal chrome. The three tabs are the product's real modes — ingest,
- * browse everything, browse only human-corrected units — not decoration.
+ * The portal chrome: a pill-shaped bar floating at the top of the page —
+ * brand left, the three product modes centred as a segmented control, tools
+ * right. The tabs are the product's real modes (ingest, browse everything,
+ * browse only human-corrected units), not decoration.
  */
 export default function Header() {
   const navigate = useNavigate();
@@ -32,34 +34,36 @@ export default function Header() {
     navigate(query ? `/?q=${encodeURIComponent(query)}` : '/');
   }
 
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
+    `rounded-full px-3.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ${
+      isActive
+        ? 'bg-surface font-semibold text-fg shadow-card'
+        : 'font-medium text-dim hover:text-fg'
+    }`;
+
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
-      <div className="mx-auto flex max-w-content items-center gap-4 px-4 py-3 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 rounded-md">
-          <img src="/logo.png" alt="" className="h-7 w-7 rounded-full" />
-          <span className="font-display text-lg font-bold tracking-tight text-fg">
-            RecSterio
-          </span>
+    <header className="sticky top-0 z-30 bg-bg/85 px-4 pb-2 pt-3 backdrop-blur sm:px-6">
+      <div className="mx-auto flex max-w-content items-center gap-3 rounded-full border border-line bg-surface py-1.5 pl-4 pr-1.5 shadow-card">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+        >
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-7 w-7 rounded-full" />
+          <span className="font-display text-lg font-bold tracking-tight text-fg">RecSterio</span>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
+        <nav
+          className="mx-auto hidden items-center gap-1 rounded-full bg-surface-2 p-1 md:flex"
+          aria-label="Primary"
+        >
           {TABS.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              end={tab.to === '/'}
-              className={({ isActive }) =>
-                `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-accent-soft text-accent-strong' : 'text-dim hover:bg-surface-2 hover:text-fg'
-                }`
-              }
-            >
+            <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className={tabClass}>
               {tab.label}
             </NavLink>
           ))}
         </nav>
 
-        <form onSubmit={submitSearch} className="ml-auto hidden w-64 items-center sm:flex" role="search">
+        <form onSubmit={submitSearch} className="ml-auto hidden w-56 items-center lg:flex md:ml-0" role="search">
           <label htmlFor="portal-search" className="sr-only">
             Search the dataset
           </label>
@@ -69,16 +73,16 @@ export default function Header() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
-            className="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-faint outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+            className="w-full rounded-full border border-line bg-surface-2 px-4 py-1.5 text-sm text-fg placeholder:text-faint outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/25"
           />
         </form>
 
-        <div className="ml-auto flex items-center gap-1 sm:ml-0">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 lg:ml-0">
           <ThemeToggle />
           {isSignedIn ? (
             <button
               type="button"
-              className={btnNeutral}
+              className={`${btnNeutral} rounded-full`}
               onClick={() => {
                 signOut();
                 navigate('/');
@@ -88,7 +92,7 @@ export default function Header() {
               Sign out
             </button>
           ) : (
-            <Link to="/login" className={btnNeutral}>
+            <Link to="/login" className={`${btnNeutral} rounded-full`}>
               Sign in
             </Link>
           )}
@@ -96,15 +100,18 @@ export default function Header() {
       </div>
 
       {/* Tabs repeat below the fold line on small screens. */}
-      <nav className="flex items-center gap-1 px-4 pb-2 md:hidden" aria-label="Primary">
+      <nav
+        className="mx-auto mt-2 flex max-w-content items-center gap-1 rounded-full border border-line bg-surface-2 p-1 md:hidden"
+        aria-label="Primary"
+      >
         {TABS.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
             end={tab.to === '/'}
             className={({ isActive }) =>
-              `rounded-md px-3 py-1.5 text-sm font-medium ${
-                isActive ? 'bg-accent-soft text-accent-strong' : 'text-dim'
+              `flex-1 rounded-full px-3 py-1.5 text-center text-sm ${
+                isActive ? 'bg-surface font-semibold text-fg shadow-card' : 'font-medium text-dim'
               }`
             }
           >

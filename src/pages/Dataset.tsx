@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, NavLink, useSearchParams } from 'react-router-dom';
 import { listCards, listPublicFolders } from '../api/client';
 import type { DataCard as DataCardModel, PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
@@ -8,6 +8,7 @@ import FolderTree from '../components/FolderTree';
 import Spinner from '../components/Spinner';
 import { btnNeutral } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
+import { useFolderRoles } from '../lib/access';
 
 /**
  * The public dataset: everything a visitor may read, organised by folder and
@@ -18,6 +19,7 @@ export default function Dataset() {
   const [params] = useSearchParams();
   const q = params.get('q') ?? '';
   const session = useSession();
+  const folderRoles = useFolderRoles();
 
   const [folders, setFolders] = useState<PublicFolder[]>([]);
   const [cards, setCards] = useState<DataCardModel[]>([]);
@@ -25,7 +27,10 @@ export default function Dataset() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // A named loader so a saved edit can refresh the cards it changed. The
+  // `cancelled` flag also stops an earlier search from overwriting a newer one
+  // when two fetches overlap.
+  const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -47,13 +52,31 @@ export default function Dataset() {
     };
   }, [q]);
 
+  useEffect(() => load(), [load]);
+
   return (
     <div className="mx-auto grid max-w-content gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[16rem_1fr]">
-      <aside className="lg:sticky lg:top-20 lg:self-start">
+      <aside className="lg:sticky lg:top-24 lg:self-start">
         <h2 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-          Folders
+          Browse
         </h2>
         <div className="card p-2">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                isActive && !q
+                  ? 'bg-surface-2 font-semibold text-fg'
+                  : 'text-dim hover:bg-surface-2 hover:text-fg'
+              }`
+            }
+          >
+            <GridIcon />
+            <span>All units</span>
+            <span className="ml-auto font-mono text-xs text-faint">{total}</span>
+          </NavLink>
+          <div className="my-1.5 border-t border-line" />
           {loading ? <Spinner label="Loading folders…" className="p-2" /> : <FolderTree nodes={folders} />}
         </div>
 
@@ -94,8 +117,8 @@ export default function Dataset() {
               <DataCardView
                 key={card.video_id}
                 card={card}
-                canEdit={canEditFolder(session, card.folder_id ?? '')}
-                onChanged={() => undefined}
+                canEdit={canEditFolder(session, card.folder_id ?? '', folderRoles)}
+                onChanged={load}
                 onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
               />
             ))}
@@ -103,5 +126,16 @@ export default function Dataset() {
         )}
       </section>
     </div>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-faint" aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
   );
 }

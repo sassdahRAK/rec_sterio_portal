@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
 import { btnNeutral, btnPrimary } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
+import { useFolderRoles } from '../lib/access';
 
 /**
  * One folder: its units as cards, its sub-folders, and the ZIP export that
@@ -15,6 +16,7 @@ import { canEditFolder, useSession } from '../store/auth';
 export default function FolderDetail() {
   const { id = '' } = useParams();
   const session = useSession();
+  const folderRoles = useFolderRoles();
   const [folder, setFolder] = useState<PublicFolder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +99,7 @@ export default function FolderDetail() {
     );
   }
 
-  const editable = canEditFolder(session, folder.id);
+  const editable = canEditFolder(session, folder.id, folderRoles);
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">

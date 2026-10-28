@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ApiError, login } from '../api/client';
+import { ApiError, isMockEnabled, login, setMockEnabled } from '../api/client';
 import GoogleButton from '../components/GoogleButton';
 import { useAuthStore } from '../store/auth';
 import { btnPrimary, inputCls, labelCls } from '../components/ui';
@@ -18,6 +18,7 @@ export default function Login() {
   const location = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [demo, setDemo] = useState(isMockEnabled());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +43,7 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
+      setMockEnabled(demo);
       const res = await login({ email: email.trim(), password });
       finish(res.token, res.role, res.email, res.name ?? null);
     } catch (err) {
@@ -91,6 +93,16 @@ export default function Login() {
             />
           </div>
 
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-dim">
+            <input
+              type="checkbox"
+              checked={demo}
+              onChange={(e) => setDemo(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-line bg-surface text-accent focus:ring-accent/40"
+            />
+            Use demo data (mock API, no backend required)
+          </label>
+
           {error ? (
             <p className="rounded-md border border-bad/40 bg-bad-soft px-3 py-2 text-xs text-bad">{error}</p>
           ) : null}
@@ -99,6 +111,11 @@ export default function Login() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        {demo ? (
+          <p className="mt-3 text-center text-2xs text-faint">
+            Demo mode accepts any valid email with a 4+ character password.
+          </p>
+        ) : null}
 
         <div className="my-5 flex items-center gap-3">
           <span className="h-px flex-1 bg-line" />

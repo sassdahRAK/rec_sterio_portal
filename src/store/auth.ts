@@ -68,12 +68,22 @@ export function useIsSignedIn(): boolean {
  * Whether the session may edit `folderId`. Pure on purpose: it is called inside
  * `.map()` over cards and after early returns, where a hook would change the
  * hook order between renders and take the whole page down.
+ *
+ * `folderRoles` comes from `useFolderRoles()` and holds the API's own answer
+ * per folder. When it has an entry, that wins over the account-level role: a
+ * member invited as a *viewer* must not see controls the API would 403, and a
+ * guest holding an editor share link must see the ones they are entitled to.
+ * A missing entry (the folder is not in the fetched tree) falls back to the
+ * coarse rule so the caller still gets an answer.
  */
-export function canEditFolder(session: Session | null, folderId: string): boolean {
+export function canEditFolder(
+  session: Session | null,
+  folderId: string,
+  folderRoles?: Record<string, Role | null>,
+): boolean {
   if (!session) return false;
-  // A signed-in account's per-folder role is fetched by the pages (a viewer
-  // invited to a folder must not see edit controls). This is the coarse
-  // fallback for a full session.
+  const role = folderRoles?.[folderId];
+  if (role !== undefined) return roleAtLeast(role, 'editor');
   if (session.role === 'admin' || session.role === 'member') return true;
   return (
     session.role === 'guest' &&

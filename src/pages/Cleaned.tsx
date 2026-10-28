@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listCards } from '../api/client';
 import type { DataCard as DataCardModel } from '../api/types';
@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
 import { btnNeutral } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
+import { useFolderRoles } from '../lib/access';
 
 /**
  * The human-corrected subset (instruction.txt #8). The badge is the filter:
@@ -15,11 +16,12 @@ import { canEditFolder, useSession } from '../store/auth';
  */
 export default function Cleaned() {
   const session = useSession();
+  const folderRoles = useFolderRoles();
   const [cards, setCards] = useState<DataCardModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     listCards({ cleaned: true })
@@ -36,6 +38,8 @@ export default function Cleaned() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => load(), [load]);
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">
@@ -69,8 +73,8 @@ export default function Cleaned() {
             <DataCardView
               key={card.video_id}
               card={card}
-              canEdit={canEditFolder(session, card.folder_id ?? '')}
-              onChanged={() => undefined}
+              canEdit={canEditFolder(session, card.folder_id ?? '', folderRoles)}
+              onChanged={load}
               onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
             />
           ))}

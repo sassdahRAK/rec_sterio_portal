@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { listPublicFolders, redeemPasscode } from '../api/client';
+import { ApiError, listPublicFolders, redeemPasscode } from '../api/client';
 import type { PublicFolder } from '../api/types';
 import { btnNeutral, btnPrimary, inputCls } from '../components/ui';
 import { deviceKey, useAuthStore } from '../store/auth';
@@ -84,13 +84,17 @@ export default function Passcode() {
       navigate(`/folder/${res.folder_id}`, { replace: true });
     } catch (err) {
       // The API answers 401 for a wrong, expired, exhausted or unknown code
-      // alike, so a failed attempt must not reveal whether the folder exists.
-      // Naming a folder the visitor cannot read would leak exactly that.
-      setStatus(
-        folderId
-          ? { kind: 'wrong' }
-          : { kind: 'error', message: err instanceof Error ? err.message : 'That passcode did not work.' },
-      );
+      // alike, so a rejected code must not reveal whether the folder exists.
+      // Only that rejection is a "wrong code"; a transport failure or a 500 is
+      // a different problem and must not be misreported as one.
+      if (err instanceof ApiError && err.status === 401) {
+        setStatus({ kind: 'wrong' });
+      } else {
+        setStatus({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'That passcode did not work.',
+        });
+      }
     }
   }
 

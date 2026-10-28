@@ -7,10 +7,9 @@
  * never see a raw hex value, and dark mode is a single override in index.css.
  *
  * The identity is deliberate, not the default: a crimson accent (not the
- * generic pink, and not the console's blue), a soft radial "halo" behind the
- * media card as the signature element, and the audio waveform as the artifact
- * that carries the subject. Light is the primary theme (the design reference
- * is light); dark is a full mapping, not an afterthought.
+ * generic pink, and not the console's blue), and the audio waveform as the
+ * artifact that carries the subject. Light is the primary theme (the design
+ * reference is light); dark is a full mapping, not an afterthought.
  */
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -67,9 +66,6 @@ export default {
       boxShadow: {
         card: '0 1px 2px 0 rgb(16 24 40 / 0.04), 0 8px 24px -16px rgb(16 24 40 / 0.18)',
         lift: '0 2px 4px 0 rgb(16 24 40 / 0.06), 0 16px 40px -16px rgb(16 24 40 / 0.28)',
-        // The signature halo: a soft crimson glow that sits behind the media
-        // card and intensifies on hover. It is the one decorative moment.
-        halo: '0 0 0 1px rgb(var(--color-accent) / 0.12), 0 18px 48px -12px rgb(var(--color-accent) / 0.32)',
       },
       maxWidth: {
         content: '72rem',
