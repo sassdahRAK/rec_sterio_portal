@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Primitive palette + semantic mapping.
+ *
+ * Light is the primary theme (the design reference is light); dark is a full
+ * remap of the same semantic names, so no component changes between themes.
+ * Contrast was checked for both: body text >= 4.5:1, accent-strong (used for
+ * text and badges) >= 4.5:1, the bright accent is reserved for fills, borders
+ * and the halo where only 3:1 is needed.
+ */
+@layer base {
+  :root {
+    --color-bg: 255 255 255;
+    --color-surface: 255 255 255;
+    --color-surface-2: 247 248 250;
+    --color-raised: 241 243 247;
+    --color-border: 232 234 239;
+    --color-border-soft: 240 242 246;
+    --color-text: 19 23 32;
+    --color-text-muted: 90 100 114;
+    --color-text-faint: 107 116 128;
+    --color-accent: 232 62 90;
+    --color-accent-strong: 200 30 60;
+    --color-accent-soft: 255 241 243;
+    --color-ok: 21 128 61;
+    --color-ok-soft: 240 253 244;
+    --color-bad: 200 30 60;
+    --color-bad-soft: 255 241 243;
+    --color-warn: 180 83 9;
+    --color-warn-soft: 255 251 235;
+    color-scheme: light;
+  }
+
+  :root[data-theme='dark'] {
+    --color-bg: 14 17 22;
+    --color-surface: 22 26 33;
+    --color-surface-2: 18 22 28;
+    --color-raised: 30 35 44;
+    --color-border: 38 44 55;
+    --color-border-soft: 32 38 48;
+    --color-text: 232 236 242;
+    --color-text-muted: 154 164 178;
+    --color-text-faint: 122 132 148;
+    --color-accent: 242 92 115;
+    --color-accent-strong: 255 122 144;
+    --color-accent-soft: 42 21 25;
+    --color-ok: 74 222 128;
+    --color-ok-soft: 16 36 26;
+    --color-bad: 242 92 115;
+    --color-bad-soft: 42 21 25;
+    --color-warn: 251 191 36;
+    --color-warn-soft: 38 28 8;
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: rgb(var(--color-accent) / 0.22);
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-accent-strong ring-offset-2 ring-offset-bg;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-border)) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-border));
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+}
+
+@layer components {
+  /* The panel every screen is built from. */
+  .card {
+    @apply rounded-xl border border-line bg-surface shadow-card;
+  }
+
+  /* The signature element: a soft crimson halo behind the media card. */
+  .halo {
+    @apply relative;
+  }
+  .halo::before {
+    content: '';
+    @apply pointer-events-none absolute -inset-3 rounded-2xl;
+    background: radial-gradient(
+      120% 100% at 50% 40%,
+      rgb(var(--color-accent) / 0.16) 0%,
+      rgb(var(--color-accent) / 0.05) 45%,
+      transparent 72%
+    );
+    opacity: 0.85;
+    transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .halo:hover::before {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
