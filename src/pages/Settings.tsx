@@ -157,15 +157,32 @@ export default function Settings() {
                 >
                   {busy === p.key ? 'Working…' : 'Disconnect'}
                 </button>
-              ) : offered === false ? (
+              ) : offered === false || offered === undefined ? (
+                /* Provider not enabled on the server — show a clear setup hint */
                 <span
                   className={`${btnNeutral} shrink-0 cursor-not-allowed opacity-50`}
-                  title="The operator has not configured this provider on the server."
+                  title={`Ask the operator to set ${p.key === 'google' ? 'GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET' : 'ONEDRIVE_CLIENT_ID + ONEDRIVE_CLIENT_SECRET'} in the server .env and restart.`}
                 >
                   Not configured
                 </span>
-              ) : p.key === 'google' ? (
+              ) : p.key === 'google' && googleClientId ? (
                 <a href={connectUrl('google')} className={`${btnPrimary} shrink-0`}>
+                  Connect
+                </a>
+              ) : p.key === 'google' && !googleClientId ? (
+                /* Server reports google=true but client id not exposed via publicConfig */
+                <a
+                  href={connectUrl('google')}
+                  className={`${btnPrimary} shrink-0`}
+                  onClick={(e) => {
+                    if (!googleClientId) {
+                      e.preventDefault();
+                      setError(
+                        'Google Client ID is not exposed to the portal. Set GOOGLE_CLIENT_ID in the server .env (it must match the Drive OAuth app) and restart.',
+                      );
+                    }
+                  }}
+                >
                   Connect
                 </a>
               ) : (
@@ -173,7 +190,7 @@ export default function Settings() {
                   type="button"
                   onClick={() =>
                     setError(
-                      'OneDrive is connected by the operator through Microsoft sign-in; use Google Drive here, or ask the operator to enable OneDrive.',
+                      'OneDrive: ask the operator to set ONEDRIVE_CLIENT_ID and ONEDRIVE_CLIENT_SECRET in the server .env to enable this provider.',
                     )
                   }
                   className={`${btnNeutral} shrink-0`}
