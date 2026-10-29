@@ -5,13 +5,20 @@ import type { Transcript, VideoDetail } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import Waveform from '../components/Waveform';
-import { btnPrimary } from '../components/ui';
+import { btnNeutral, btnPrimary, inputCls } from '../components/ui';
+import { videoStatusLabel } from '../lib/statusLabels';
 import { useIsSignedIn } from '../store/auth';
 
 type Phase =
   | { kind: 'idle' }
   | { kind: 'working'; videoId: string; status: string; progress: number }
   | { kind: 'done'; videoId: string }
+  /**
+   * The API already has this link (a 409). `videoId` is present only when this
+   * caller may open the colliding unit — the server redacts it otherwise, so
+   * there is nothing to link to and nothing the visitor can do but ask.
+   */
+  | { kind: 'duplicate'; videoId?: string }
   | { kind: 'error'; message: string };
 
 /**
@@ -51,6 +58,10 @@ export default function Scrape() {
   const [detail, setDetail] = useState<VideoDetail | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const pollRef = useRef<number | null>(null);
+  /** Last status observed for the saved job, so retry cannot resume a dead one. */
+  const lastStatusRef = useRef<{ id: string; status: string } | null>(null);
+  /** Synchronous submit guard: the `busy` state lags a fast double click. */
+  const submittingRef = useRef(false);
 
   function watch(videoId: string) {
     if (pollRef.current) window.clearInterval(pollRef.current);
@@ -59,6 +70,7 @@ export default function Scrape() {
     const tick = async () => {
       try {
         const next = await getVideo(videoId);
+        lastStatusRef.current = { id: videoId, status: next.status };
         setDetail(next);
         setPhase({ kind: 'working', videoId, status: next.status, progress: next.progress });
         if (next.status === 'transcribed' || next.status === 'failed') {
@@ -74,7 +86,9 @@ export default function Scrape() {
             }
           }
           if (next.status === 'failed') {
-            setPhase({ kind: 'error', message: next.error ?? 'That clip failed to process.' });
+            // A dead job must not stay saved: "Try again" would re-watch it forever.
+            saveJob(null);
+            setPhase({ kind: 'error', message: next.error ?? 'That unit could not be processed.' });
           } else {
             setPhase({ kind: 'done', videoId: next.id });
           }
@@ -89,7 +103,10 @@ export default function Scrape() {
           setPhase({ kind: 'idle' });
           return;
         }
-        setPhase({ kind: 'error', message: 'Lost contact with the server while scraping.' });
+        setPhase({
+          kind: 'error',
+          message: 'Lost contact with the server. Check your connection and try again.',
+        });
       }
     };
 
@@ -109,33 +126,65 @@ export default function Scrape() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const source = url.trim();
-    if (!source) return;
-    setPhase({ kind: 'working', videoId: '', status: 'queued', progress: 0 });
+  async function start(source: string) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setPhase({ kind: 'working', videoId: '', status: 'pending', progress: 0 });
     setDetail(null);
     setTranscript(null);
     try {
       const video = await createVideo({ source_url: source });
       watch(video.id);
     } catch (err) {
-      // A link already in the dataset (and readable by this caller) comes back
-      // as a 409 carrying the existing unit's id: retrieve it instead of
-      // telling the user their paste failed. That is the whole point of
-      // sharing one dataset — a teammate re-pasting a known link should land
-      // on the existing unit, not a duplicate or an error.
+      // A link already in the dataset comes back as a 409. It carries the
+      // existing unit's id only when this caller could open that unit; the
+      // server redacts it otherwise. Either way the link is taken, so name that
+      // state — and never fall through to "Try again", which cannot succeed.
       if (err instanceof ApiError && err.status === 409) {
         const details = (err.details ?? []) as { video_id?: string }[];
         const existingId = details.find((d) => d?.video_id)?.video_id;
-        if (existingId) {
-          setPhase({ kind: 'working', videoId: existingId, status: 'downloaded', progress: 100 });
-          watch(existingId);
-          return;
-        }
+        saveJob(null);
+        setPhase({ kind: 'duplicate', videoId: existingId });
+        setUrl('');
+        return;
       }
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : 'Could not queue that link.' });
+      setPhase({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not add that link. Try again.',
+      });
+    } finally {
+      submittingRef.current = false;
     }
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const source = url.trim();
+    if (!source) return;
+    void start(source);
+  }
+
+  /**
+   * Recovery for either failure path: a job that is still known to the server
+   * is watched again, otherwise the link in the field is re-submitted.
+   */
+  function retry() {
+    if (phase.kind === 'working' || submittingRef.current) return;
+    const saved = readSavedJob();
+    // Only resume a job that is plausibly still running. A job whose last known
+    // status was terminal (failed or already transcribed) is not something to
+    // watch again — drop the saved id and re-submit the link in the field.
+    const last = lastStatusRef.current;
+    const terminal = last !== null && last.id === saved && (last.status === 'failed' || last.status === 'transcribed');
+    if (saved && !terminal) {
+      setPhase({ kind: 'working', videoId: saved, status: 'pending', progress: 0 });
+      watch(saved);
+      return;
+    }
+    if (saved) saveJob(null);
+    const source = url.trim();
+    if (source) void start(source);
+    else setPhase({ kind: 'idle' });
   }
 
   async function regenerate(engine: 'whisper' | 'gemini' | 'both') {
@@ -154,7 +203,7 @@ export default function Scrape() {
         <div className="card mx-auto max-w-lg p-6 text-center">
           <h1 className="font-display text-xl font-bold text-fg">Sign in to add to the dataset</h1>
           <p className="mt-2 text-sm text-dim">
-            Scraping a link creates a new unit in the dataset. Browsing public datasets needs no
+            Adding a link creates a new unit in the dataset. Browsing public datasets needs no
             account — only adding does.
           </p>
           <Link to="/login" className={`${btnPrimary} mt-4`}>
@@ -169,35 +218,30 @@ export default function Scrape() {
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">
-      <h1 className="mb-1 font-display text-2xl font-bold text-fg">Enter url</h1>
+      <h1 className="mb-1 font-display text-2xl font-bold text-fg">Add a unit</h1>
       <p className="mb-4 text-sm text-dim">
-        Paste a direct media link. recsterio downloads it, extracts the audio and transcribes it.
+        Paste a link to a video. RecSterio downloads it, extracts the audio and transcribes it.
       </p>
 
       <form onSubmit={submit} className="mb-6 flex flex-wrap gap-2">
-        <div className="flex min-w-0 flex-1 basis-64 items-center rounded-md border border-line bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
-          <span className="font-mono text-sm text-faint">https://</span>
-          <label htmlFor="scrape-url" className="sr-only">
-            Media URL
-          </label>
-          <input
-            id="scrape-url"
-            type="url"
-            required
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="example.com/video.mp4"
-            className="w-full bg-transparent py-2 pl-1 text-sm text-fg outline-none placeholder:text-faint"
-          />
-        </div>
+        <input
+          id="scrape-url"
+          type="url"
+          required
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          aria-label="Video link"
+          placeholder="Paste a video link"
+          className={`${inputCls} min-w-0 basis-64 flex-1`}
+        />
         <button type="submit" className={btnPrimary} disabled={busy}>
-          {busy ? 'Working…' : 'Scrape'}
+          {busy ? 'Working…' : 'Add'}
         </button>
       </form>
 
       {phase.kind === 'idle' ? (
         <div className="card flex aspect-video w-full items-center justify-center text-faint">
-          <span className="text-sm">The scraped clip will appear here.</span>
+          <span className="text-sm">Your unit will appear here once it's added.</span>
         </div>
       ) : null}
 
@@ -205,7 +249,11 @@ export default function Scrape() {
         <div className="card mb-5 flex items-center gap-3 p-4">
           <Spinner label="" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-fg">{phase.status}</p>
+            {/* Announce only the short status line, not the card: the progress
+                bar mutates on every poll and would spam the live region. */}
+            <p className="text-sm font-medium text-fg" aria-live="polite">
+              {videoStatusLabel(phase.status)}
+            </p>
             <div className="mt-1 h-1.5 w-56 overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full bg-accent transition-all"
@@ -217,8 +265,42 @@ export default function Scrape() {
       ) : null}
 
       {phase.kind === 'error' ? (
-        <div className="card mb-5 border-bad/40 bg-bad-soft p-4 text-sm text-bad">
-          {phase.message || 'That link could not be processed.'}
+        <div
+          role="alert"
+          className="card mb-5 flex flex-wrap items-center justify-between gap-3 border-bad/40 bg-bad-soft p-4 text-sm text-bad"
+        >
+          <span>{phase.message || 'That link could not be added.'}</span>
+          <button type="button" className={btnNeutral} onClick={retry}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      {phase.kind === 'duplicate' ? (
+        <div
+          role="status"
+          className="card mb-5 border-warn/40 bg-warn-soft p-4 text-sm text-warn"
+        >
+          <p className="font-medium">This link is already in the dataset.</p>
+          <p className="mt-1">
+            {phase.videoId
+              ? "You don't need to add it twice — the unit is ready to open."
+              : 'Ask whoever added it for access, or open the folder it was filed into.'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {phase.videoId ? (
+              <Link to={`/video/${phase.videoId}`} className={btnPrimary}>
+                Open the existing unit
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              className={btnNeutral}
+              onClick={() => setPhase({ kind: 'idle' })}
+            >
+              Add a different link
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -226,7 +308,7 @@ export default function Scrape() {
         <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
           <div className="card flex flex-col gap-3 p-5">
             <h2 className="font-display text-base font-semibold text-fg">
-              {detail.title || 'Untitled clip'}
+              {detail.title || 'Untitled unit'}
             </h2>
             <div className="flex aspect-video items-center justify-center rounded-lg border border-line bg-surface-2 text-faint">
               Media
@@ -248,7 +330,7 @@ export default function Scrape() {
             <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
               Transcript
             </span>
-            <p className="max-h-[24rem] overflow-auto rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-xs leading-relaxed text-dim">
+            <p className="max-h-[24rem] overflow-auto whitespace-pre-wrap rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-xs leading-relaxed text-dim">
               {transcript?.content || 'No transcript yet.'}
             </p>
           </div>

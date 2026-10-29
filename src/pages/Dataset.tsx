@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState';
 import FolderTree from '../components/FolderTree';
 import SearchBar from '../components/SearchBar';
 import Spinner from '../components/Spinner';
-import { btnNeutral, selectCls } from '../components/ui';
+import { btnNeutral, btnPrimary, selectCls } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
 import { flattenFolders, folderOptionLabel } from '../lib/folders';
@@ -70,13 +70,32 @@ export default function Dataset() {
             onSubmit={(query) => navigate(query ? `/?q=${encodeURIComponent(query)}` : '/')}
             className="order-last basis-full sm:order-none sm:basis-auto sm:w-56"
           />
-          <span className="ml-auto font-mono text-xs text-faint">{total} units</span>
+          <span
+            className="ml-auto font-mono text-xs text-faint"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {total} units
+          </span>
         </div>
 
         {loading ? (
           <Spinner label="Loading dataset…" />
         ) : error ? (
-          <EmptyState title="We couldn't load the dataset">{error}</EmptyState>
+          <EmptyState
+            title="We couldn't load the dataset"
+            action={
+              <button type="button" className={btnPrimary} onClick={() => load()}>
+                Try again
+              </button>
+            }
+          >
+            {/* The failed load is announced without moving focus: the button
+                beside it is the recovery path. */}
+            <span aria-live="polite">
+              Something went wrong while loading. Check your connection and try again.
+            </span>
+          </EmptyState>
         ) : cards.length === 0 ? (
           <EmptyState title="Nothing here yet">
             {q

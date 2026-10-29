@@ -20,7 +20,10 @@
     --color-border-soft: 240 242 246;
     --color-text: 19 23 32;
     --color-text-muted: 90 100 114;
-    --color-text-faint: 107 116 128;
+    /* 105/114/126 is the darkest value that still reads as "faint" while
+       clearing 4.5:1 on surface-2 (4.586:1); the previous 107/116/128 sat at
+       4.456:1. Dark theme already clears at 4.801:1 and is unchanged. */
+    --color-text-faint: 105 114 126;
     --color-accent: 232 62 90;
     --color-accent-strong: 200 30 60;
     --color-accent-soft: 255 241 243;

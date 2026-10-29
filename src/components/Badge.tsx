@@ -1,4 +1,5 @@
 import type { Badge as BadgeKind } from '../api/types';
+import { badgeLabel } from '../lib/statusLabels';
 
 /**
  * The provenance badge. It answers the question every dataset visitor has:
@@ -15,7 +16,7 @@ export default function Badge({ kind, className = '' }: { kind: BadgeKind; class
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${styles} ${className}`}
     >
-      {kind}
+      {badgeLabel(kind)}
     </span>
   );
 }

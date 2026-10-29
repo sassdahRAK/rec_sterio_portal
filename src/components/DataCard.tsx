@@ -11,6 +11,7 @@ import Badge from './Badge';
 import Waveform from './Waveform';
 import { formatDuration } from '../lib/format';
 import { claimPlayback, releasePlayback } from '../lib/playback';
+import { videoStatusLabel } from '../lib/statusLabels';
 import { btnDanger, btnNeutral, btnPrimary, iconBtn, inputCls } from './ui';
 
 /**
@@ -150,13 +151,13 @@ export default function DataCardView({
     }
   }
 
-  const title = card.title || card.folder_name || 'Untitled clip';
+  const title = card.title || card.folder_name || 'Untitled unit';
 
   // min-w-0 lets the grid track shrink below the card's min-content width
   // (the truncated title is nowrap, so its min-content is the full title);
   // without it the card pushes 90px of horizontal scroll at 360px.
   return (
-    <article className="card flex min-w-0 flex-col gap-4 p-5 animate-fade-up">
+    <article className="card flex min-w-0 flex-col gap-4 p-5">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate font-display text-base font-semibold text-fg" title={title}>
@@ -165,7 +166,7 @@ export default function DataCardView({
           <p className="mt-0.5 truncate text-xs text-faint">
             {card.duration_seconds != null ? formatDuration(card.duration_seconds) : 'no duration'}
             {card.folder_name ? ` · ${card.folder_name}` : ''}
-            {card.status !== 'transcribed' ? ` · ${card.status}` : ''}
+            {card.status !== 'transcribed' ? ` · ${videoStatusLabel(card.status)}` : ''}
           </p>
         </div>
         <Badge kind={card.badge} className="shrink-0" />
@@ -191,7 +192,9 @@ export default function DataCardView({
             type="button"
             onClick={videoReady ? playVideo : undefined}
             disabled={!videoReady || videoLoading}
-            aria-label={videoReady ? `Play ${title}` : `Video is still ${card.status}`}
+            aria-label={
+              videoReady ? `Play ${title}` : `Video is not ready yet. Status: ${videoStatusLabel(card.status)}`
+            }
             className="group relative block aspect-video w-full disabled:cursor-default"
           >
             <img
@@ -226,7 +229,7 @@ export default function DataCardView({
                   ? "This unit's storage is offline — the contributor disconnected their drive."
                   : card.status === 'failed'
                     ? 'No media on disk.'
-                    : `Video is still ${card.status}.`}
+                    : `Video is still being prepared (${videoStatusLabel(card.status)}).`}
               </span>
             )}
           </div>
@@ -298,12 +301,12 @@ export default function DataCardView({
           <div className="flex flex-col gap-1">
             <p
               ref={transcriptRef}
-              className={`rounded-md border border-line bg-surface-2 px-3 py-2 text-xs leading-relaxed text-dim${
+              className={`whitespace-pre-wrap rounded-md border border-line bg-surface-2 px-3 py-2 text-xs leading-relaxed text-dim${
                 expanded ? '' : ' line-clamp-6'
               }`}
             >
               {card.transcript_preview || (
-                <span className="text-faint">No transcript yet — this clip is still processing.</span>
+                <span className="text-faint">No transcript yet — this unit is still processing.</span>
               )}
             </p>
             {overflowing || expanded ? (

@@ -59,10 +59,16 @@ export default function VideoDetail() {
   if (error || !card) {
     return (
       <div className="mx-auto max-w-content px-4 py-10 sm:px-6">
+        <div aria-live="polite">
         <EmptyState
           title="This unit isn't available"
           action={
             <div className="flex flex-wrap justify-center gap-2">
+              {error ? (
+                <button type="button" className={btnNeutral} onClick={() => load()}>
+                  Try again
+                </button>
+              ) : null}
               <Link to="/" className={btnNeutral}>
                 Back to the dataset
               </Link>
@@ -79,9 +85,11 @@ export default function VideoDetail() {
             </div>
           }
         >
-          {error ??
-            'Sign in if it is your own unit (an unfiled one is visible only to its creator), or unlock it with the passcode or share link the owner sent.'}
+          {error
+            ? 'We could not load this unit. Check your connection and try again.'
+            : 'Sign in if it is your own unit (an unfiled one is visible only to its creator), or unlock it with the passcode or share link the owner sent.'}
         </EmptyState>
+        </div>
       </div>
     );
   }

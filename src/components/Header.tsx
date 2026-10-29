@@ -5,7 +5,7 @@ import ConfirmDialog from './ConfirmDialog';
 import ThemeToggle from './ThemeToggle';
 
 const TABS = [
-  { to: '/scrape', label: 'Auto scrape' },
+  { to: '/scrape', label: 'Add' },
   { to: '/', label: 'Dataset' },
   { to: '/cleaned', label: 'Cleaned' },
 ];
@@ -100,7 +100,7 @@ export default function Header() {
           the phone moves to the floating <BottomNav /> bar instead. */}
       <nav
         className="mx-auto mt-2 hidden max-w-content items-center gap-1 rounded-full border border-line bg-surface-2 p-1 sm:flex md:hidden"
-        aria-label="Primary"
+        aria-label="Sections"
       >
         {TABS.map((tab) => (
           <NavLink
@@ -108,7 +108,10 @@ export default function Header() {
             to={tab.to}
             end={tab.to === '/'}
             className={({ isActive }) =>
-              `tap-pad flex flex-1 items-center justify-center text-center ${tabClass({ isActive })}`
+              // min-h-[44px] is unconditional: `tap-pad` only lifts the hit
+              // area on coarse pointers, and this row is the tablet-width
+              // touch target between 640 and 767px.
+              `tap-pad min-h-[44px] flex flex-1 items-center justify-center text-center ${tabClass({ isActive })}`
             }
           >
             {tab.label}

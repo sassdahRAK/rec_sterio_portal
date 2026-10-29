@@ -75,14 +75,11 @@ export default {
           from: { opacity: '0', transform: 'translateY(6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
-        'scale-in': {
-          from: { opacity: '0', transform: 'scale(0.97)' },
-          to: { opacity: '1', transform: 'scale(1)' },
-        },
       },
       animation: {
+        // Only the dialog entrance animates; dataset cards render in place so
+        // a grid of them is not a wall of staggered motion.
         'fade-up': 'fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both',
-        'scale-in': 'scale-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both',
       },
     },
   },

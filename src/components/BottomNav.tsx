@@ -22,13 +22,13 @@ export default function BottomNav() {
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label="Mobile sections"
       className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 sm:hidden"
     >
       <div className="mx-auto flex max-w-md items-stretch gap-1 rounded-full border border-line bg-surface/90 px-1.5 py-0.5 shadow-card backdrop-blur">
         <NavLink to="/scrape" className={itemClass}>
           <FunnelIcon />
-          <span className="max-w-full truncate">Scrape</span>
+          <span className="max-w-full truncate">Add</span>
         </NavLink>
         <NavLink to="/" end className={itemClass}>
           <DatabaseIcon />

@@ -6,7 +6,7 @@ import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import SearchBar from '../components/SearchBar';
 import Spinner from '../components/Spinner';
-import { btnNeutral } from '../components/ui';
+import { btnNeutral, btnPrimary } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
 
@@ -27,6 +27,7 @@ export default function Cleaned() {
   const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     listCards(q ? { cleaned: true, q } : { cleaned: true })
       .then((res) => {
         if (!cancelled) setCards(res.items);
@@ -59,7 +60,13 @@ export default function Cleaned() {
           }}
           className="order-last basis-full sm:order-none sm:basis-auto sm:w-56"
         />
-        <span className="ml-auto font-mono text-xs text-faint">{cards.length} units</span>
+        <span
+          className="ml-auto font-mono text-xs text-faint"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {cards.length} units
+        </span>
       </div>
       <p className="mb-5 max-w-2xl text-sm text-dim">
         Transcripts a person has corrected. The raw ASR output is kept alongside each one, so you
@@ -69,7 +76,18 @@ export default function Cleaned() {
       {loading ? (
         <Spinner label="Loading cleaned units…" />
       ) : error ? (
-        <EmptyState title="We couldn't load this view">{error}</EmptyState>
+        <EmptyState
+          title="We couldn't load this view"
+          action={
+            <button type="button" className={btnPrimary} onClick={() => load()}>
+              Try again
+            </button>
+          }
+        >
+          <span aria-live="polite">
+            Something went wrong while loading. Check your connection and try again.
+          </span>
+        </EmptyState>
       ) : cards.length === 0 ? (
         <EmptyState
           title="No cleaned units yet"

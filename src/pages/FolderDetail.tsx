@@ -26,6 +26,10 @@ export default function FolderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zipping, setZipping] = useState(false);
+  // A failed export is a local problem with one control (the ZIP button), not
+  // proof the folder is gone — so it gets its own state and never trips the
+  // page-level "This folder isn't available" branch.
+  const [zipError, setZipError] = useState<string | null>(null);
   // A 404 from this route means one of two things: the folder does not exist, or
   // it is private and the caller has no token. Only the second case may be
   // advertised, so the door is offered only once the folder is known to exist.
@@ -72,10 +76,13 @@ export default function FolderDetail() {
   async function downloadZip() {
     if (!folder) return;
     setZipping(true);
+    setZipError(null);
     try {
       await downloadFolderZip(folder.id, folder.name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not build the ZIP.');
+      setZipError(
+        err instanceof Error ? err.message : 'The download could not be built. Try again.',
+      );
     } finally {
       setZipping(false);
     }
@@ -93,10 +100,16 @@ export default function FolderDetail() {
     const known = exists && error !== null;
     return (
       <div className="mx-auto max-w-content px-4 py-10 sm:px-6">
+        <div aria-live="polite">
         <EmptyState
           title="This folder isn't available"
           action={
             <div className="flex flex-wrap justify-center gap-2">
+              {error ? (
+                <button type="button" className={btnNeutral} onClick={() => load()}>
+                  Try again
+                </button>
+              ) : null}
               <Link to="/" className={btnNeutral}>
                 Back to the dataset
               </Link>
@@ -112,8 +125,11 @@ export default function FolderDetail() {
             </div>
           }
         >
-          {error ?? 'It may be private. Unlock it with the passcode or link the owner shared.'}
+          {error
+            ? 'We could not load this folder. Check your connection and try again.'
+            : 'It may be private. Unlock it with the passcode or link the owner shared.'}
         </EmptyState>
+        </div>
       </div>
     );
   }
@@ -170,12 +186,31 @@ export default function FolderDetail() {
                 : 'border-line bg-surface-2 text-dim'
             }`}
           >
-            {folder.visibility}
+            {folder.visibility === 'public' ? 'Public' : 'Private'}
           </span>
         </div>
-        <button type="button" className={btnPrimary} onClick={downloadZip} disabled={zipping}>
-          {zipping ? 'Building ZIP…' : 'Download dataset (.zip)'}
-        </button>
+        <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+          <button type="button" className={btnPrimary} onClick={downloadZip} disabled={zipping}>
+            {zipping ? 'Building ZIP…' : 'Download dataset (.zip)'}
+          </button>
+          {/* Local failure: stays beside the control that caused it. */}
+          {zipError ? (
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-2 rounded-md border border-bad/40 bg-bad-soft px-2.5 py-1.5 text-xs text-bad"
+            >
+              <span>{zipError}</span>
+              <button
+                type="button"
+                className="tap-pad shrink-0 rounded px-1 font-medium underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-bad/40"
+                onClick={() => setZipError(null)}
+                aria-label="Dismiss download error"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {folder.children.length > 0 ? (
