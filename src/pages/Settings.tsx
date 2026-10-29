@@ -39,6 +39,11 @@ import {
 
 const PENDING_KEY = 'recsterio.cloud.pending';
 
+/** Cross-tab signal: one tab completed the handshake, every other tab should
+ * re-read /cloud/links. `storage` events only fire in *other* tabs, which is
+ * exactly the direction we need. */
+const CONNECTED_SIGNAL_KEY = 'recsterio.cloud.connected';
+
 /** (provider, code) pairs already exchanged this page lifecycle. OAuth codes
  * are single-use, so deduping is semantically correct — and it keeps the
  * StrictMode dev double-mount from POSTing the same code twice (the second
@@ -102,6 +107,12 @@ function cloudErrorMessage(err: unknown): string {
     if (err.code === 'provider_not_configured') {
       return "This provider isn't configured on the server — ask the operator.";
     }
+    if (err.code === 'cloud_token_key_required') {
+      return "The server can't store drive tokens securely yet — ask the operator to set CLOUD_TOKEN_KEY.";
+    }
+    if (err.code === 'upstream_error') {
+      return 'The provider rejected the handshake — start Connect again; if it repeats, ask the operator.';
+    }
     const details = Array.isArray(err.details)
       ? (err.details as { field?: string; issue?: string }[])
       : [];
@@ -153,27 +164,51 @@ const GoogleApp = {
 const MicrosoftApp = {
   clientId: ((import.meta.env.VITE_ONEDRIVE_CLIENT_ID as string | undefined) || '').trim(),
   tenant: ((import.meta.env.VITE_ONEDRIVE_TENANT as string | undefined) || '').trim() || 'common',
-  // offline_access → the backend demands a refresh token.
-  scope: 'offline_access https://graph.microsoft.com/Files.ReadWrite.AppFolder',
+  // offline_access → the backend demands a refresh token; User.Read → the
+  // backend reads the account email from Graph /me after the exchange.
+  scope:
+    'offline_access https://graph.microsoft.com/Files.ReadWrite.AppFolder ' +
+    'https://graph.microsoft.com/User.Read',
 };
 
+/** `state` carries the provider across the popup boundary, which sessionStorage
+ * cannot: a `noopener` window is a separate browsing context and inherits none.
+ * The nonce makes each handshake distinct; the provider prefix is what we read back. */
+function makeState(provider: CloudBackend): string {
+  const nonce = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+  return `${provider}.${nonce}`;
+}
+
+function providerFromState(state: string | null): CloudBackend | null {
+  const p = state?.split('.')[0];
+  return p === 'google' || p === 'onedrive' ? p : null;
+}
+
 /** Consent URL builders. `redirect_uri` comes from the one shared constant. */
-function consentUrl(provider: CloudBackend, googleClientId: string): string {
+function consentUrl(
+  provider: CloudBackend,
+  state: string,
+  googleClientId: string,
+  onedriveClientId: string,
+): string {
   const redirect = encodeURIComponent(cloudRedirectUri());
+  const stateParam = encodeURIComponent(state);
   if (provider === 'google') {
     return (
       `${GoogleApp.authUrl}?client_id=${encodeURIComponent(googleClientId)}` +
       `&redirect_uri=${redirect}&response_type=code` +
       `&scope=${encodeURIComponent(GoogleApp.scope)}` +
-      '&access_type=offline&prompt=consent'
+      `&access_type=offline&prompt=consent` +
+      `&state=${stateParam}`
     );
   }
   return (
     `https://login.microsoftonline.com/${encodeURIComponent(MicrosoftApp.tenant)}/oauth2/v2.0/authorize` +
-    `?client_id=${encodeURIComponent(MicrosoftApp.clientId)}` +
+    `?client_id=${encodeURIComponent(onedriveClientId)}` +
     `&redirect_uri=${redirect}&response_type=code` +
     `&scope=${encodeURIComponent(MicrosoftApp.scope)}` +
-    '&prompt=consent'
+    `&prompt=consent` +
+    `&state=${stateParam}`
   );
 }
 
@@ -183,6 +218,7 @@ export default function Settings() {
   const [available, setAvailable] = useState<CloudProviders | null>(null);
   const [links, setLinks] = useState<DriveLink[]>([]);
   const [googleClientId, setGoogleClientId] = useState('');
+  const [onedriveClientId, setOnedriveClientId] = useState('');
   const [busy, setBusy] = useState<false | CloudBackend>(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -216,7 +252,8 @@ export default function Settings() {
       ]);
       setAvailable(providers);
       setLinks(connected);
-      setGoogleClientId(config.google_client_id || '');
+      setGoogleClientId(providers.google_client_id || config.google_client_id || '');
+      setOnedriveClientId(providers.onedrive_client_id || MicrosoftApp.clientId || '');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load your storage settings.');
     } finally {
@@ -243,6 +280,12 @@ export default function Settings() {
         setExchangeError(null);
         setLastCode(null);
         setNotice(`Connected as ${link.account_email}`);
+        // Tell any other tab showing the pending card that this provider is done.
+        try {
+          localStorage.setItem(CONNECTED_SIGNAL_KEY, String(Date.now()));
+        } catch {
+          /* storage unavailable (private mode) — the opener tab just stays stale */
+        }
         return null;
       } catch (err) {
         return cloudErrorMessage(err);
@@ -253,14 +296,25 @@ export default function Settings() {
     [],
   );
 
-  // Auto-complete on landing: the provider comes back with ?code=… (it never
-  // sends ?provider=, so the pending key in sessionStorage names the provider).
+  // Auto-complete on landing: the provider comes back with ?code=… and echoes
+  // our `state` (which names the provider). ?provider= and the pending key are
+  // fallbacks for links minted before the state handshake existed.
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('code');
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
     if (!code) return;
-    const providerParam = new URLSearchParams(window.location.search).get('provider');
+    const rawState = params.get('state');
+    const providerParam = params.get('provider');
     const provider =
-      providerParam === 'google' || providerParam === 'onedrive' ? providerParam : readPending();
+      providerFromState(rawState) ??
+      (providerParam === 'google' || providerParam === 'onedrive' ? providerParam : null) ??
+      readPending();
+    if (rawState !== null && providerFromState(rawState) === null) {
+      // A state we didn't mint belongs to some unrelated OAuth flow — exchanging
+      // its code here would be wrong (and could burn the other app's code).
+      console.warn('[cloud] authorization code arrived with a foreign state; ignoring');
+      return;
+    }
     if (!provider) {
       // A stale OAuth URL with no pending handshake of ours — leave it alone.
       console.warn('[cloud] landed with an authorization code but no pending provider; ignoring');
@@ -288,19 +342,37 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Another tab finished the connect: clear our pending card and re-read links.
+  useEffect(() => {
+    function onStorage(event: StorageEvent): void {
+      if (event.key !== CONNECTED_SIGNAL_KEY) return;
+      sessionStorage.removeItem(PENDING_KEY);
+      setPending(null);
+      setPopupBlocked(false);
+      setPendingUrl('');
+      setExchangeError(null);
+      setLastCode(null);
+      void load();
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [load]);
+
   function startConnect(provider: CloudBackend) {
     setError(null);
     setNotice(null);
     setExchangeError(null);
     setLastCode(null);
-    const url = consentUrl(provider, googleClientId);
+    // The provider now rides in `state`, which the consent page echoes back, so
+    // the tab no longer has to share our sessionStorage. That is why we can
+    // keep the opener (no `noopener`) and trust a null handle as "blocked".
+    const state = makeState(provider);
+    const url = consentUrl(provider, state, googleClientId, onedriveClientId);
     sessionStorage.setItem(PENDING_KEY, provider);
     setPending(provider);
     setPendingUrl(url);
-    // `noopener` detaches the consent tab, so a null handle *may* mean the
-    // popup was blocked — the card offers a plain <a> as the fallback action
-    // whenever we cannot confirm the tab opened.
-    setPopupBlocked(window.open(url, '_blank', 'noopener') === null);
+    const win = window.open(url, '_blank');
+    setPopupBlocked(win === null);
   }
 
   function cancelPending() {
@@ -388,8 +460,15 @@ export default function Settings() {
       <h1 className="font-display text-xl font-semibold text-fg">Settings</h1>
       <p className="mt-1 text-sm text-dim">
         Keep your contributed video bytes on your own cloud. Connect a drive, then choose it when you
-        upload a clip — the file goes straight to your drive and the dataset catalogues it.
+        upload a video — the file goes straight to your drive and the dataset catalogues it.
       </p>
+      {available && (!available.google || !available.onedrive) ? (
+        <div className="mt-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-dim">
+          <strong className="font-semibold text-fg">Drive storage isn't enabled yet.</strong>{' '}
+          An operator has to connect a storage account first; after that you can link your own
+          Google Drive or OneDrive here.
+        </div>
+      ) : null}
 
       {error ? <p className="mt-3 text-sm text-bad">{error}</p> : null}
       {notice ? <p className="mt-3 text-sm text-ok">{notice}</p> : null}
@@ -398,8 +477,7 @@ export default function Settings() {
         {PROVIDERS.map((p) => {
           const connected = links.find((l) => l.provider === p.key);
           const offered = available?.[p.key];
-          const clientIdMissing =
-            p.key === 'google' ? !googleClientId : !MicrosoftApp.clientId;
+          const clientIdMissing = p.key === 'google' ? !googleClientId : !onedriveClientId;
           const isPending = pending === p.key && !connected;
           return (
             <div key={p.key} className="card p-4">
@@ -412,9 +490,8 @@ export default function Settings() {
                   ) : null}
                   {!connected && offered === true && clientIdMissing ? (
                     <p className="mt-1 text-xs text-faint">
-                      {p.key === 'google'
-                        ? 'Google Client ID is not exposed to the portal — ask the operator to set GOOGLE_CLIENT_ID in the server .env.'
-                        : 'OneDrive app id not configured for this site — ask the operator.'}
+                      Connecting {p.label} isn't available on this site yet — ask the operator to
+                      enable it.
                     </p>
                   ) : null}
                 </div>
@@ -449,16 +526,19 @@ export default function Settings() {
                       </button>
                     </div>
                   ) : offered === false ? (
-                    /* Provider not enabled on the server — show a clear setup hint */
-                    <span
-                      className={`${btnNeutral} cursor-not-allowed opacity-50`}
-                      title={`Ask the operator to set ${p.key === 'google' ? 'GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET' : 'ONEDRIVE_CLIENT_ID + ONEDRIVE_CLIENT_SECRET'} in the server .env and restart.`}
+                    /* Provider not enabled on this server. The reason and the next
+                       step are visible text — previously they lived only in a
+                       hover title, so the dead card read as "the feature is broken". */
+                    <div
+                      className="max-w-[13rem] text-right"
+                      title="Ask the operator to enable this provider for the site."
                     >
-                      Not configured
-                    </span>
+                      <p className="text-xs font-medium text-dim">Not available</p>
+                      <p className="mt-0.5 text-xs text-faint">Not set up here yet.</p>
+                    </div>
                   ) : available === null ? (
                     /* Still loading (or the status call failed): never flash
-                       "Not configured" for a provider we haven't heard about. */
+                       "Not available" for a provider we haven't heard about. */
                     <Spinner label={loading ? 'Checking…' : 'Unavailable'} className="justify-end" />
                   ) : clientIdMissing ? (
                     <button type="button" disabled className={`${btnNeutral}`}>

@@ -42,6 +42,9 @@ export interface DriveLink {
 export interface CloudProviders {
   google: boolean;
   onedrive: boolean;
+  /** Public OAuth client id, or null when the server has no drive app configured. */
+  google_client_id?: string | null;
+  onedrive_client_id?: string | null;
 }
 
 export interface CloudUpload {
