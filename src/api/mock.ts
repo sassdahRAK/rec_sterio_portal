@@ -58,6 +58,9 @@ const F3 = uid(0xf3);
 const F4 = uid(0xf4);
 const F5 = uid(0xf5);
 
+/** Connected drives in demo mode; mutable so Connect/Disconnect visibly work. */
+const mockDriveLinks: { id: string; provider: 'google' | 'onedrive'; account_email: string; connected_at: string }[] = [];
+
 const mockFolders: MockFolder[] = [
   { id: F1, name: 'TvNa Phnom Penh — places', description: 'The public demo dataset: places around the capital, recorded and transcribed.', visibility: 'public', parent_id: null, position: 0 },
   { id: F2, name: 'Cafés & study spots', description: 'Laptop-friendly corners students actually work in.', visibility: 'public', parent_id: F1, position: 0 },
@@ -237,7 +240,7 @@ let transcripts: MockTranscriptRow[] = [
 let comments: FolderComment[] = [
   {
     id: uid(201), folder_id: F1, author_id: null,
-    author_label: 'member:sokha@test.local',
+    author_label: 'user:sokha@test.local',
     body: 'Transcript 3 has one number wrong (four hundred, not four thousand riel) — flagged for cleaning.',
     created_at: iso(2_000_000),
   },
@@ -607,8 +610,14 @@ export function mockRequest(
     return json(publicFolderNode(folder, token));
   }
   if (rawPath === '/public/passcodes/redeem' && method === 'POST') {
-    const payload = (body ?? {}) as { folder_id?: string; code?: string };
-    const folder = mockFolders.find((item) => item.id === payload.folder_id);
+    const payload = (body ?? {}) as { folder_id?: string; folder_name?: string; code?: string };
+    // Mirrors the real API: a link names the folder by id, a visitor by name.
+    const wanted = payload.folder_name?.trim().toLowerCase();
+    const folder = mockFolders.find(
+      (item) =>
+        (payload.folder_id ? item.id === payload.folder_id : true) &&
+        (wanted ? item.name.toLowerCase() === wanted : true),
+    );
     // Only F5 has a passcode; every other answer is the uniform 401 the real
     // API gives, so a demo visitor learns nothing about folders that do not
     // match the code.
@@ -651,6 +660,7 @@ export function mockRequest(
   /* ------------------------------------------------------------------ cards */
   if (rawPath === '/dataset/cards' && method === 'GET') {
     const folderId = query.get('folder_id');
+    const videoId = query.get('video_id');
     const cleanedParam = query.get('cleaned');
     const q = (query.get('q') ?? '').toLowerCase();
     const page = Math.max(1, Number(query.get('page') ?? 1) || 1);
@@ -661,6 +671,7 @@ export function mockRequest(
       return folder ? canSee(folder, token) : false;
     });
     if (folderId) visible = visible.filter((video) => video.folder_id === folderId);
+    if (videoId) visible = visible.filter((video) => video.id === videoId);
     if (q) {
       visible = visible.filter(
         (video) =>
@@ -680,6 +691,32 @@ export function mockRequest(
       page_size: pageSize,
     };
     return json(res);
+  }
+
+  /* --------------------------------------------------------- personal cloud */
+  // Demo mode offers Google Drive only, and "connecting" just records a link
+  // for the session so the Settings page has something real to render.
+  if (rawPath === '/cloud/providers' && method === 'GET') {
+    return json({ google: true, onedrive: false });
+  }
+  if (rawPath === '/cloud/links' && method === 'GET') {
+    return json(mockDriveLinks);
+  }
+  if (rawPath === '/cloud/links' && method === 'POST') {
+    const payload = (body ?? {}) as { provider?: string };
+    const link = {
+      id: `mock-drive-${mockDriveLinks.length + 1}`,
+      provider: (payload.provider ?? 'google') as 'google' | 'onedrive',
+      account_email: 'demo@gmail.com',
+      connected_at: new Date().toISOString(),
+    };
+    mockDriveLinks.push(link);
+    return json(link);
+  }
+  if (segments[0] === 'cloud' && segments[1] === 'links' && segments[2] && method === 'DELETE') {
+    const index = mockDriveLinks.findIndex((l) => l.provider === segments[2]);
+    if (index >= 0) mockDriveLinks.splice(index, 1);
+    return { status: 204, data: undefined };
   }
 
   /* ---------------------------------------------------------------- folders */

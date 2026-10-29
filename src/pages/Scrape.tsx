@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { createVideo, generateTranscript, getVideo, getTranscript } from '../api/client';
+import { ApiError, createVideo, generateTranscript, getVideo, getTranscript } from '../api/client';
 import type { Transcript, VideoDetail } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -15,6 +15,31 @@ type Phase =
   | { kind: 'error'; message: string };
 
 /**
+ * The job id of the scrape in flight. A scrape outlives this screen — the
+ * server keeps downloading after the visitor switches tabs — so the id is
+ * kept in storage and polling resumes when they come back, instead of the
+ * page resetting to an empty form with the work invisible.
+ */
+const SCRAPE_KEY = 'recsterio.portal.scrape';
+
+function readSavedJob(): string | null {
+  try {
+    return localStorage.getItem(SCRAPE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveJob(videoId: string | null): void {
+  try {
+    if (videoId) localStorage.setItem(SCRAPE_KEY, videoId);
+    else localStorage.removeItem(SCRAPE_KEY);
+  } catch {
+    /* storage unavailable — the scrape still works, it just cannot resume */
+  }
+}
+
+/**
  * The ingest tab (instruction.txt #10): paste a link, recsterio downloads it,
  * extracts the audio and transcribes it. Requires a signed-in account — an
  * anonymous visitor can browse but not add to the dataset.
@@ -27,15 +52,11 @@ export default function Scrape() {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-    };
-  }, []);
-
   function watch(videoId: string) {
     if (pollRef.current) window.clearInterval(pollRef.current);
-    pollRef.current = window.setInterval(async () => {
+    saveJob(videoId);
+
+    const tick = async () => {
       try {
         const next = await getVideo(videoId);
         setDetail(next);
@@ -43,6 +64,8 @@ export default function Scrape() {
         if (next.status === 'transcribed' || next.status === 'failed') {
           if (pollRef.current) window.clearInterval(pollRef.current);
           pollRef.current = null;
+          // Keep the id: coming back to this tab should still show the last
+          // result, not an empty form. It is replaced on the next scrape.
           if (next.status === 'transcribed') {
             try {
               setTranscript(await getTranscript(videoId));
@@ -56,13 +79,35 @@ export default function Scrape() {
             setPhase({ kind: 'done', videoId: next.id });
           }
         }
-      } catch {
+      } catch (err) {
         if (pollRef.current) window.clearInterval(pollRef.current);
         pollRef.current = null;
+        // A saved job that no longer exists is stale, not a network problem —
+        // clear it and leave a usable form rather than a permanent error.
+        if (err instanceof ApiError && err.status === 404) {
+          saveJob(null);
+          setPhase({ kind: 'idle' });
+          return;
+        }
         setPhase({ kind: 'error', message: 'Lost contact with the server while scraping.' });
       }
-    }, 2000);
+    };
+
+    // Read once immediately so a resumed job shows its current state at once.
+    void tick();
+    pollRef.current = window.setInterval(tick, 2000);
   }
+
+  // Resume an unfinished scrape after a tab switch or a reload.
+  useEffect(() => {
+    const saved = readSavedJob();
+    if (saved) watch(saved);
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -75,6 +120,20 @@ export default function Scrape() {
       const video = await createVideo({ source_url: source });
       watch(video.id);
     } catch (err) {
+      // A link already in the dataset (and readable by this caller) comes back
+      // as a 409 carrying the existing unit's id: retrieve it instead of
+      // telling the user their paste failed. That is the whole point of
+      // sharing one dataset — a teammate re-pasting a known link should land
+      // on the existing unit, not a duplicate or an error.
+      if (err instanceof ApiError && err.status === 409) {
+        const details = (err.details ?? []) as { video_id?: string }[];
+        const existingId = details.find((d) => d?.video_id)?.video_id;
+        if (existingId) {
+          setPhase({ kind: 'working', videoId: existingId, status: 'downloaded', progress: 100 });
+          watch(existingId);
+          return;
+        }
+      }
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : 'Could not queue that link.' });
     }
   }

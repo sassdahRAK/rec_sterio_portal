@@ -12,7 +12,10 @@
  */
 import { MockBlobError, mockBlob, mockRequest } from './mock';
 import type {
+  CloudProviders,
+  CloudUpload,
   DatasetCardList,
+  DriveLink,
   FolderComment,
   FolderSummary,
   GuestSession,
@@ -104,7 +107,12 @@ function qs(query?: Query): string {
 
 async function parseError(res: Response): Promise<never> {
   let code = 'request_failed';
-  let message = `Request failed (${res.status}).`;
+  // A 5xx with no error envelope is almost always the dev proxy failing to
+  // reach the API, so name that rather than just echoing the status.
+  let message =
+    res.status >= 500
+      ? 'The API is not responding. Check that the backend is running.'
+      : `Request failed (${res.status}).`;
   let details: unknown = null;
   try {
     const body = (await res.json()) as {
@@ -167,6 +175,8 @@ export const getPublicFolder = (folderId: string): Promise<PublicFolder> =>
 
 export interface CardQuery {
   folder_id?: string;
+  /** Exactly one unit — how the per-video page resolves its card. */
+  video_id?: string;
   cleaned?: boolean;
   q?: string;
   page?: number;
@@ -179,14 +189,24 @@ export const listCards = (query: CardQuery = {}): Promise<DatasetCardList> =>
 export const guestSession = (): Promise<GuestSession> =>
   request<GuestSession>('/auth/guest', { method: 'POST' });
 
+/**
+ * Redeem a passcode. The folder is identified by the id from a link or by the
+ * name the visitor typed — never by a folder list, which would disclose how
+ * many folders exist and what they are called.
+ */
 export const redeemPasscode = (
-  folderId: string,
   code: string,
   deviceKey?: string,
+  folder: { folderId?: string; folderName?: string } = {},
 ): Promise<GuestToken> =>
   request<GuestToken>('/public/passcodes/redeem', {
     method: 'POST',
-    body: JSON.stringify({ folder_id: folderId, code, device_key: deviceKey }),
+    body: JSON.stringify({
+      folder_id: folder.folderId,
+      folder_name: folder.folderName,
+      code,
+      device_key: deviceKey,
+    }),
   });
 
 export const redeemShare = (token: string, deviceKey?: string): Promise<GuestToken> =>
@@ -276,6 +296,44 @@ export const addComment = (folderId: string, body: string): Promise<FolderCommen
 export const listFolders = (): Promise<{ items: FolderSummary[]; total: number }> =>
   request('/folders');
 
+/* ------------------------------------------------------- personal cloud */
+
+export const cloudProviders = (): Promise<CloudProviders> => request('/cloud/providers');
+
+export const listDriveLinks = (): Promise<DriveLink[]> => request('/cloud/links');
+
+export const connectDrive = (
+  provider: string,
+  code: string,
+  redirectUri?: string,
+): Promise<DriveLink> =>
+  request<DriveLink>('/cloud/links', {
+    method: 'POST',
+    body: JSON.stringify({ provider, code, redirect_uri: redirectUri }),
+  });
+
+export const disconnectDrive = (provider: string): Promise<void> =>
+  request<void>(`/cloud/links/${provider}`, { method: 'DELETE' });
+
+export const startCloudUpload = (
+  backend: string,
+  filename?: string,
+): Promise<CloudUpload> =>
+  request<CloudUpload>('/cloud/uploads', {
+    method: 'POST',
+    body: JSON.stringify({ backend, filename }),
+  });
+
+export const completeCloudUpload = (
+  videoId: string,
+  providerFileId: string,
+  meta?: { size?: number; checksum_sha256?: string },
+): Promise<Video> =>
+  request<Video>(`/cloud/uploads/${videoId}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ provider_file_id: providerFileId, ...meta }),
+  });
+
 /* ------------------------------------------------------- binary / blobs */
 
 /**
@@ -326,14 +384,34 @@ export async function downloadAudio(videoId: string, title?: string | null): Pro
   saveBlob(blob, `${safe}.wav`);
 }
 
+/** The path every API route lives under, relative to the host. */
+const API_PATH = '/api/v1';
+
 /**
  * Media URLs come back from the API as full paths (`/api/v1/videos/{id}/audio`),
  * but `fetchBlob` and the streaming branch both want a base-relative one. Strip
- * a leading base when it is there — otherwise the two get concatenated into
+ * the API prefix when it is there — otherwise the two get concatenated into
  * `/api/v1/api/v1/...` and the request 404s.
+ *
+ * Both shapes are handled the same way: an absolute URL keeps only its path,
+ * and whichever prefix is present (the bare `/api/v1` of a same-origin
+ * deployment, or an absolute `VITE_API_BASE_URL`) is removed. Matching on
+ * `API_BASE` alone missed the second case, because a relative `/api/v1/...`
+ * never begins with an absolute base.
  */
 function toApiRelative(url: string): string {
-  return url.startsWith(API_BASE) ? url.slice(API_BASE.length) : url;
+  let path = url;
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+      return url;
+    }
+  }
+  for (const prefix of [API_BASE, API_PATH]) {
+    if (prefix && path.startsWith(prefix)) return path.slice(prefix.length);
+  }
+  return path;
 }
 
 /**

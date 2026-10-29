@@ -25,7 +25,7 @@ export default function Login() {
   function finish(token: string, role: string, mail: string, name: string | null) {
     useAuthStore.getState().setSession({
       token,
-      role: role === 'admin' ? 'admin' : 'member',
+      role: ['super_admin', 'admin'].includes(role) ? 'admin' : 'user',
       email: mail,
       name,
       folderIds: [],

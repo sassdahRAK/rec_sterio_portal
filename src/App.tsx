@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { isMockEnabled, setMockEnabled } from './api/client';
 import Header from './components/Header';
 import Cleaned from './pages/Cleaned';
 import Dataset from './pages/Dataset';
@@ -6,7 +7,9 @@ import FolderDetail from './pages/FolderDetail';
 import Login from './pages/Login';
 import Passcode from './pages/Passcode';
 import Scrape from './pages/Scrape';
+import Settings from './pages/Settings';
 import Share from './pages/Share';
+import VideoDetail from './pages/VideoDetail';
 
 /**
  * The public portal.
@@ -16,9 +19,34 @@ import Share from './pages/Share';
  * folder answers 404 until a passcode or share link has scoped the visitor's
  * token to it.
  */
+/**
+ * Demo mode is stored in localStorage, so without an exit a visitor who once
+ * opened a `?mock=1` link can never reach the real dataset. This bar names the
+ * state and offers the one-click way out.
+ */
+function DemoBar() {
+  if (!isMockEnabled()) return null;
+  return (
+    <div className="border-b border-warn/30 bg-warn-soft px-4 py-1.5 text-center text-xs text-warn sm:px-6">
+      Showing demo data, not your dataset.{' '}
+      <button
+        type="button"
+        className="tap-pad inline-flex items-center font-semibold underline underline-offset-2 hover:text-fg"
+        onClick={() => {
+          setMockEnabled(false);
+          window.location.assign(window.location.pathname);
+        }}
+      >
+        Use live data
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <div className="flex min-h-screen flex-col bg-bg text-fg">
+      <DemoBar />
       <Header />
       <main className="flex-1">
         <Routes>
@@ -26,9 +54,14 @@ export default function App() {
           <Route path="/cleaned" element={<Cleaned />} />
           <Route path="/scrape" element={<Scrape />} />
           <Route path="/folder/:id" element={<FolderDetail />} />
+          {/* One unit on its own URL — what the bot links to for a video it
+              cannot send through Telegram. */}
+          <Route path="/video/:id" element={<VideoDetail />} />
           <Route path="/passcode" element={<Passcode />} />
           <Route path="/share/:token" element={<Share />} />
           <Route path="/login" element={<Login />} />
+          {/* Connect a personal drive (also the OAuth redirect target). */}
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

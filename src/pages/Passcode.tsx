@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, listPublicFolders, redeemPasscode } from '../api/client';
-import type { PublicFolder } from '../api/types';
+import { ApiError, redeemPasscode } from '../api/client';
 import { btnNeutral, btnPrimary, inputCls } from '../components/ui';
 import { deviceKey, useAuthStore } from '../store/auth';
 
@@ -9,76 +8,38 @@ type Status =
   | { kind: 'idle' }
   | { kind: 'busy' }
   | { kind: 'wrong' }
-  | { kind: 'error'; message: string }
-  | { kind: 'need-folder' };
-
-/** Flatten the forest into one selectable level. */
-function flatten(nodes: PublicFolder[], depth = 0): { node: PublicFolder; depth: number }[] {
-  return nodes.flatMap((node) => [
-    { node, depth },
-    ...flatten(node.children, depth + 1),
-  ]);
-}
+  | { kind: 'error'; message: string };
 
 /**
- * The door to a private folder (instruction.txt #4). The folder is the
- * capability and the passcode is the proof, so both are needed — a visitor who
- * only has the code picks the folder they were sent to.
+ * The door to a private folder (instruction.txt #4). The passcode is the
+ * capability; the folder is named by the visitor or fixed by the link they
+ * were sent.
  *
- * This page is also the dataset's own entry point for a passcode. It is linked
- * from `FolderDetail`'s "locked" message and from a locked folder's sidebar,
- * which is the "Have a passcode?" affordance the console advertises.
+ * Deliberately no folder list: publishing one would tell every visitor how many
+ * folders exist and what they are called, which is precisely what a private
+ * folder must not disclose.
  */
 export default function Passcode() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
 
-  // `?folder=` arrives from a folder link. It preselects the folder and is not
-  // required: a visitor may arrive with only the code.
+  // `?folder=` arrives from a folder link and fixes the folder; then only the
+  // code is needed.
   const requested = params.get('folder') ?? '';
 
-  const [folders, setFolders] = useState<PublicFolder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [folderId, setFolderId] = useState(requested);
+  const [folderName, setFolderName] = useState('');
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    listPublicFolders()
-      .then((res) => {
-        if (!cancelled) setFolders(res.items);
-      })
-      .catch(() => {
-        // A folder list failure is not fatal: the input still accepts a folder
-        // id from the visitor's own link.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const options = useMemo(() => flatten(folders), [folders]);
-  // A private folder is deliberately absent from the public list, so a link
-  // carrying `?folder=<private id>` would leave the select with no matching
-  // option — the visitor would see "Choose a folder…" and have no way to
-  // re-pick the one they were sent to. Keep the requested folder selectable.
-  const selectable = useMemo(() => {
-    if (!folderId || options.some(({ node }) => node.id === folderId)) return options;
-    return [{ node: { id: folderId, name: 'Private folder', visibility: 'private', cards: [], children: [] }, depth: 0 }, ...options];
-  }, [options, folderId]);
-  const chosen = selectable.find(({ node }) => node.id === folderId)?.node ?? null;
-
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!folderId || !code.trim()) return;
+    if (!code.trim() || (!requested && !folderName.trim())) return;
     setStatus({ kind: 'busy' });
     try {
-      const res = await redeemPasscode(folderId, code.trim(), deviceKey());
+      const res = await redeemPasscode(code.trim(), deviceKey(), {
+        folderId: requested || undefined,
+        folderName: requested ? undefined : folderName.trim(),
+      });
       useAuthStore.getState().setSession({
         token: res.token,
         role: 'guest',
@@ -117,27 +78,28 @@ export default function Passcode() {
           for, then type the code.
         </p>
 
-        <label htmlFor="folder" className="mt-4 block text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-          Folder
-        </label>
-        <select
-          id="folder"
-          value={folderId}
-          onChange={(e) => {
-            setFolderId(e.target.value);
-            setStatus({ kind: 'idle' });
-          }}
-          className={inputCls}
-        >
-          <option value="">Choose a folder…</option>
-          {loading ? <option disabled>Loading folders…</option> : null}
-          {selectable.map(({ node, depth }) => (
-            <option key={node.id} value={node.id}>
-              {depth > 0 ? `${'— '.repeat(depth)}` : ''}
-              {node.name}
-            </option>
-          ))}
-        </select>
+        {requested ? null : (
+          <>
+            <label
+              htmlFor="folder-name"
+              className="mt-4 block text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+            >
+              Folder name
+            </label>
+            <input
+              id="folder-name"
+              type="text"
+              autoComplete="off"
+              value={folderName}
+              onChange={(e) => {
+                setFolderName(e.target.value);
+                setStatus({ kind: 'idle' });
+              }}
+              className={inputCls}
+              placeholder="The folder your host named"
+            />
+          </>
+        )}
 
         <label htmlFor="passcode" className="mt-4 block text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
           Passcode
@@ -169,28 +131,25 @@ export default function Passcode() {
         <button
           type="submit"
           className={`${btnPrimary} mt-4 w-full`}
-          disabled={busy || !folderId || !code.trim()}
+          disabled={busy || !code.trim() || (!requested && !folderName.trim())}
         >
           {busy ? 'Checking…' : 'Open folder'}
         </button>
 
-        <p className="mt-3 text-center text-xs text-faint">
-          Opened this folder before?{' '}
-          <Link
-            to={`/folder/${folderId}`}
-            className="tap-pad inline-flex items-center rounded px-1 text-accent hover:underline"
-          >
-            Go to it directly
-          </Link>
-        </p>
+        {/* Only a link knows the folder id; without one there is nothing to
+            link to, so the shortcut would point at a folder that is not set. */}
+        {requested ? (
+          <p className="mt-3 text-center text-xs text-faint">
+            Opened this folder before?{' '}
+            <Link
+              to={`/folder/${requested}`}
+              className="tap-pad inline-flex items-center rounded px-1 text-accent hover:underline"
+            >
+              Go to it directly
+            </Link>
+          </p>
+        ) : null}
       </form>
-
-      {chosen ? (
-        <p className="mx-auto mt-4 max-w-md text-center text-xs text-faint">
-          Opens <span className="font-medium text-dim">{chosen.name}</span> —{' '}
-          {chosen.visibility === 'private' ? 'private' : 'public'}.
-        </p>
-      ) : null}
 
       <div className="mx-auto mt-6 flex max-w-md justify-center">
         <Link to="/" className={btnNeutral}>

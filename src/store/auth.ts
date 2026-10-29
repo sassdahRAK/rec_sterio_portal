@@ -1,7 +1,7 @@
 /**
  * Portal session.
  *
- * One token store covers all three ways in: an operator signs in (admin/member),
+ * One token store covers all three ways in: an operator signs in (admin/user),
  * a visitor redeems a passcode or share link (guest, scoped to exactly one
  * folder), and everyone else is anonymous — which the API already treats as a
  * guest, so no token is needed to browse public datasets.
@@ -11,7 +11,12 @@ import { persist } from 'zustand/middleware';
 import { setTokenProvider } from '../api/client';
 import type { Role } from '../api/types';
 
-export type SessionRole = 'admin' | 'member' | 'guest';
+/**
+ * Portal-level session role. The backend's account roles collapse into two
+ * tiers here: super_admin/admin → 'admin' (the admin-level portal surface),
+ * developer/reviewer/user → 'user'; a passcode or share token stays 'guest'.
+ */
+export type SessionRole = 'admin' | 'user' | 'guest';
 
 export interface Session {
   token: string;
@@ -47,7 +52,20 @@ export const useAuthStore = create<AuthState>()(
       setSession: (session) => set({ session }),
       clear: () => set({ session: null }),
     }),
-    { name: 'recsterio.portal.session' },
+    {
+      name: 'recsterio.portal.session',
+      version: 1,
+      // v0 sessions may still carry the pre-rename role literal 'member';
+      // rehydrate them as 'user' instead of silently dropping the session.
+      migrate: (state) => {
+        const restored = state as AuthState;
+        const session = restored?.session;
+        if (session && (session as { role?: string }).role === 'member') {
+          restored.session = { ...session, role: 'user' };
+        }
+        return restored;
+      },
+    },
   ),
 );
 
@@ -61,7 +79,7 @@ export function useSession(): Session | null {
 
 export function useIsSignedIn(): boolean {
   const session = useSession();
-  return session?.role === 'admin' || session?.role === 'member';
+  return session?.role === 'admin' || session?.role === 'user';
 }
 
 /**
@@ -84,7 +102,7 @@ export function canEditFolder(
   if (!session) return false;
   const role = folderRoles?.[folderId];
   if (role !== undefined) return roleAtLeast(role, 'editor');
-  if (session.role === 'admin' || session.role === 'member') return true;
+  if (session.role === 'admin' || session.role === 'user') return true;
   return (
     session.role === 'guest' &&
     session.folderIds.includes(folderId) &&

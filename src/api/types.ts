@@ -8,6 +8,7 @@
 export type Role = 'viewer' | 'commenter' | 'editor';
 export type Badge = 'raw' | 'cleaned';
 export type Visibility = 'public' | 'private';
+export type CloudBackend = 'google' | 'onedrive';
 
 export interface DataCard {
   video_id: string;
@@ -25,6 +26,29 @@ export interface DataCard {
   media_url: string;
   audio_url: string;
   transcript_url: string;
+  /** Where the bytes live; null means server disk. */
+  storage_backend?: CloudBackend | null;
+  /** False when a cloud drive is disconnected — the unit is listed but can't play. */
+  storage_available?: boolean;
+}
+
+export interface DriveLink {
+  id: string;
+  provider: CloudBackend;
+  account_email: string;
+  connected_at: string;
+}
+
+export interface CloudProviders {
+  google: boolean;
+  onedrive: boolean;
+}
+
+export interface CloudUpload {
+  video_id: string;
+  upload_url: string;
+  upload_headers: Record<string, string>;
+  expires_at?: string | null;
 }
 
 export interface PublicFolder {
@@ -125,6 +149,8 @@ export interface Video {
   duration_seconds?: number | null;
   mime_type?: string | null;
   thumbnail_url?: string | null;
+  /** Present when the bytes live on the contributor's own cloud, not server disk. */
+  storage_backend?: CloudBackend | null;
   created_by: string;
   created_at: string;
   updated_at: string;

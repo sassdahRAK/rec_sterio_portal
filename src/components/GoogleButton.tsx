@@ -66,7 +66,7 @@ export default function GoogleButton({ onDone }: { onDone: () => void }) {
             const res = await googleLogin(response.credential);
             useAuthStore.getState().setSession({
               token: res.token,
-              role: res.role === 'admin' ? 'admin' : 'member',
+              role: ['super_admin', 'admin'].includes(res.role) ? 'admin' : 'user',
               email: res.email,
               name: res.name ?? null,
               folderIds: [],
