@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { signOut, useIsSignedIn, useSession } from '../store/auth';
 import ConfirmDialog from './ConfirmDialog';
 import ThemeToggle from './ThemeToggle';
@@ -18,22 +18,9 @@ const TABS = [
  */
 export default function Header() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [q, setQ] = useState(params.get('q') ?? '');
   const isSignedIn = useIsSignedIn();
   const session = useSession();
   const [signOutOpen, setSignOutOpen] = useState(false);
-
-  // Keep the box in sync when a page sets ?q= itself.
-  useEffect(() => {
-    setQ(params.get('q') ?? '');
-  }, [params]);
-
-  function submitSearch(e: FormEvent) {
-    e.preventDefault();
-    const query = q.trim();
-    navigate(query ? `/?q=${encodeURIComponent(query)}` : '/');
-  }
 
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `rounded-full px-3.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ${
@@ -65,36 +52,23 @@ export default function Header() {
           ))}
         </nav>
 
-        <form onSubmit={submitSearch} className="ml-auto hidden w-56 items-center lg:flex md:ml-0" role="search">
-          <label htmlFor="portal-search" className="sr-only">
-            Search the dataset
-          </label>
-          <input
-            id="portal-search"
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
-            className="w-full rounded-full border border-line bg-surface-2 px-4 py-1.5 text-sm text-fg placeholder:text-faint outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/25"
-          />
-        </form>
-
         <div className="ml-auto flex shrink-0 items-center gap-1.5 lg:ml-0">
           <ThemeToggle />
           {isSignedIn ? (
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                `tap-pad inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ${
+                `tap-pad hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ${
                   isActive
                     ? 'font-semibold text-fg'
                     : 'font-medium text-dim hover:text-fg'
                 }`
               }
               title="Connect your own Google Drive / OneDrive"
+              aria-label="My storage"
             >
               <CloudIcon />
-              My storage
+              <span className="hidden sm:inline">My storage</span>
             </NavLink>
           ) : null}
           {isSignedIn ? (
@@ -103,25 +77,29 @@ export default function Header() {
               className="tap-pad inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-dim transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
               onClick={() => setSignOutOpen(true)}
               title={session?.email ?? 'Sign out'}
+              aria-label="Sign out"
             >
               <LogoutIcon />
-              Sign out
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           ) : (
             <Link
               to="/login"
               className="tap-pad inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-dim transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+              title="Sign in"
+              aria-label="Sign in"
             >
               <LogInIcon />
-              Sign in
+              <span className="hidden sm:inline">Sign in</span>
             </Link>
           )}
         </div>
       </div>
 
-      {/* Tabs repeat below the fold line on small screens. */}
+      {/* Tabs repeat below the fold line between sm and md only — below 640px
+          the phone moves to the floating <BottomNav /> bar instead. */}
       <nav
-        className="mx-auto mt-2 flex max-w-content items-center gap-1 rounded-full border border-line bg-surface-2 p-1 md:hidden"
+        className="mx-auto mt-2 hidden max-w-content items-center gap-1 rounded-full border border-line bg-surface-2 p-1 sm:flex md:hidden"
         aria-label="Primary"
       >
         {TABS.map((tab) => (
@@ -130,9 +108,7 @@ export default function Header() {
             to={tab.to}
             end={tab.to === '/'}
             className={({ isActive }) =>
-              `tap-pad flex flex-1 items-center justify-center rounded-full px-3 py-1.5 text-center text-sm ${
-                isActive ? 'bg-surface font-semibold text-fg shadow-card' : 'font-medium text-dim'
-              }`
+              `tap-pad flex flex-1 items-center justify-center text-center ${tabClass({ isActive })}`
             }
           >
             {tab.label}

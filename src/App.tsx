@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { isMockEnabled, setMockEnabled } from './api/client';
+import BottomNav from './components/BottomNav';
 import Header from './components/Header';
 import Cleaned from './pages/Cleaned';
 import Dataset from './pages/Dataset';
@@ -48,7 +49,10 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-bg text-fg">
       <DemoBar />
       <Header />
-      <main className="flex-1">
+      {/* Fixed phone bar — mounts once at the shell level so it renders on
+          every route, like Telegram. sm:pb-0 because it hides at ≥640px. */}
+      <BottomNav />
+      <main className="min-w-0 flex-1 pb-24 sm:pb-0">
         <Routes>
           <Route path="/" element={<Dataset />} />
           <Route path="/cleaned" element={<Cleaned />} />
@@ -65,7 +69,9 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <footer className="border-t border-line px-4 py-5 sm:px-6">
+      {/* Extra bottom pad on phones so the footer's last line clears the
+          floating bar when the page is scrolled fully to the end. */}
+      <footer className="border-t border-line px-4 pb-24 pt-5 sm:px-6 sm:pb-5">
         <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-3">
           <p className="text-2xs text-faint">
             RecSterio — Khmer–English speech dataset. Video, audio and transcript, cleaned by hand.

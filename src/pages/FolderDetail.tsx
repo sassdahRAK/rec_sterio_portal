@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { downloadFolderZip, getPublicFolder } from '../api/client';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { downloadFolderZip, getPublicFolder, listPublicFolders } from '../api/client';
 import type { PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
-import { btnNeutral, btnPrimary } from '../components/ui';
+import { btnNeutral, btnPrimary, selectCls } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
+import { flattenFolders, folderOptionLabel } from '../lib/folders';
 
 /**
  * One folder: its units as cards, its sub-folders, and the ZIP export that
@@ -15,9 +16,13 @@ import { useFolderRoles } from '../lib/access';
  */
 export default function FolderDetail() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const session = useSession();
   const folderRoles = useFolderRoles();
   const [folder, setFolder] = useState<PublicFolder | null>(null);
+  // The full public tree for the phone jump picker — a convenience, so its
+  // failure is swallowed rather than breaking the folder itself.
+  const [tree, setTree] = useState<PublicFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zipping, setZipping] = useState(false);
@@ -49,6 +54,20 @@ export default function FolderDetail() {
   }, [id]);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listPublicFolders()
+      .then((res) => {
+        if (!cancelled) setTree(res.items);
+      })
+      .catch(() => {
+        /* jump picker stays empty */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function downloadZip() {
     if (!folder) return;
@@ -100,9 +119,38 @@ export default function FolderDetail() {
   }
 
   const editable = canEditFolder(session, folder.id, folderRoles);
+  const jumpOptions = flattenFolders(tree);
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">
+      {/* The same phone jump control the dataset page uses: pick any folder
+          in one tap. The current folder is always reflected in the box. */}
+      <div className="card mb-4 p-2 sm:hidden">
+        <label htmlFor="folder-jump" className="sr-only">
+          Browse folders
+        </label>
+        <select
+          id="folder-jump"
+          value={folder.id}
+          onChange={(e) => {
+            if (e.target.value !== folder.id) navigate(`/folder/${e.target.value}`);
+          }}
+          className={selectCls}
+        >
+          {!jumpOptions.some((f) => f.id === folder.id) ? (
+            // A folder reached via a share link or passcode is not in the
+            // public tree — name it so the control still shows where you are.
+            <option value={folder.id}>{folder.name}</option>
+          ) : null}
+          {jumpOptions.map((f) => (
+            <option key={f.id} value={f.id}>
+              {'\u00A0\u00A0'.repeat(f.depth)}
+              {folderOptionLabel(f)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <nav className="mb-3 text-xs text-faint" aria-label="Breadcrumb">
         <Link to="/" className="hover:text-accent-strong">
           Dataset
@@ -113,7 +161,7 @@ export default function FolderDetail() {
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-fg">{folder.name}</h1>
+          <h1 className="break-words font-display text-2xl font-bold text-fg">{folder.name}</h1>
           {folder.description ? <p className="mt-1 text-sm text-dim">{folder.description}</p> : null}
           <span
             className={`mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] ${
@@ -135,7 +183,20 @@ export default function FolderDetail() {
           <h2 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
             Sub-folders
           </h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Phones get one compact divided list; sm+ keeps the card grid. */}
+          <div className="divide-y divide-line rounded-xl border border-line sm:hidden">
+            {folder.children.map((child) => (
+              <Link
+                key={child.id}
+                to={`/folder/${child.id}`}
+                className="flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-dim transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+              >
+                <span className="truncate">{child.name}</span>
+                <span className="shrink-0 font-mono text-xs text-faint">{child.cards.length}</span>
+              </Link>
+            ))}
+          </div>
+          <div className="hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-3">
             {folder.children.map((child) => (
               <Link
                 key={child.id}

@@ -162,7 +162,7 @@ export default function DataCardView({
           <h3 className="truncate font-display text-base font-semibold text-fg" title={title}>
             {title}
           </h3>
-          <p className="mt-0.5 text-xs text-faint">
+          <p className="mt-0.5 truncate text-xs text-faint">
             {card.duration_seconds != null ? formatDuration(card.duration_seconds) : 'no duration'}
             {card.folder_name ? ` · ${card.folder_name}` : ''}
             {card.status !== 'transcribed' ? ` · ${card.status}` : ''}
@@ -241,7 +241,7 @@ export default function DataCardView({
           disabled={videoLoading}
           aria-label={playing ? `Pause audio for ${title}` : `Play audio for ${title}`}
           title="Play audio"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-card text-fg transition hover:border-accent/50 disabled:opacity-40"
+          className="flex tap-pad p-2 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-fg transition hover:border-accent/50 disabled:opacity-40"
         >
           {playing ? <PauseIcon small /> : <PlayIcon small />}
         </button>

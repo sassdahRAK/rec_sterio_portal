@@ -174,8 +174,8 @@ export default function Scrape() {
         Paste a direct media link. recsterio downloads it, extracts the audio and transcribes it.
       </p>
 
-      <form onSubmit={submit} className="mb-6 flex gap-2">
-        <div className="flex flex-1 items-center rounded-md border border-line bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
+      <form onSubmit={submit} className="mb-6 flex flex-wrap gap-2">
+        <div className="flex min-w-0 flex-1 basis-64 items-center rounded-md border border-line bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
           <span className="font-mono text-sm text-faint">https://</span>
           <label htmlFor="scrape-url" className="sr-only">
             Media URL

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { listCards } from '../api/client';
 import type { DataCard as DataCardModel } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
+import SearchBar from '../components/SearchBar';
 import Spinner from '../components/Spinner';
 import { btnNeutral } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
@@ -15,6 +16,8 @@ import { useFolderRoles } from '../lib/access';
  * trustworthy.
  */
 export default function Cleaned() {
+  const [params, setParams] = useSearchParams();
+  const q = params.get('q') ?? '';
   const session = useSession();
   const folderRoles = useFolderRoles();
   const [cards, setCards] = useState<DataCardModel[]>([]);
@@ -24,7 +27,7 @@ export default function Cleaned() {
   const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
-    listCards({ cleaned: true })
+    listCards(q ? { cleaned: true, q } : { cleaned: true })
       .then((res) => {
         if (!cancelled) setCards(res.items);
       })
@@ -37,15 +40,26 @@ export default function Cleaned() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [q]);
 
   useEffect(() => load(), [load]);
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-baseline gap-3">
         <h1 className="font-display text-2xl font-bold text-fg">Cleaned</h1>
-        <span className="font-mono text-xs text-faint">{cards.length} units</span>
+        <SearchBar
+          id="cleaned-search"
+          value={q}
+          onSubmit={(query) => {
+            const next = new URLSearchParams(params);
+            if (query) next.set('q', query);
+            else next.delete('q');
+            setParams(next);
+          }}
+          className="order-last basis-full sm:order-none sm:basis-auto sm:w-56"
+        />
+        <span className="ml-auto font-mono text-xs text-faint">{cards.length} units</span>
       </div>
       <p className="mb-5 max-w-2xl text-sm text-dim">
         Transcripts a person has corrected. The raw ASR output is kept alongside each one, so you

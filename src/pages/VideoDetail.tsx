@@ -107,7 +107,7 @@ export default function VideoDetail() {
       </nav>
 
       <div className="mb-5">
-        <h1 className="font-display text-2xl font-bold text-fg">
+        <h1 className="break-words font-display text-2xl font-bold text-fg">
           {card.title?.trim() || 'Untitled unit'}
         </h1>
         <p className="mt-1 text-xs text-faint">

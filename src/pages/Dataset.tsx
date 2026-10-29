@@ -5,21 +5,12 @@ import type { DataCard as DataCardModel, PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
 import FolderTree from '../components/FolderTree';
+import SearchBar from '../components/SearchBar';
 import Spinner from '../components/Spinner';
-import { btnNeutral } from '../components/ui';
+import { btnNeutral, selectCls } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
-
-/** Folder tree flattened into picker options; depth shows as indentation. */
-function flattenFolders(
-  nodes: PublicFolder[],
-  depth = 0,
-): { id: string; name: string; depth: number }[] {
-  return nodes.flatMap((n) => [
-    { id: n.id, name: n.name, depth },
-    ...flattenFolders(n.children, depth + 1),
-  ]);
-}
+import { flattenFolders, folderOptionLabel } from '../lib/folders';
 
 /**
  * The public dataset: everything a visitor may read, organised by folder and
@@ -68,7 +59,49 @@ export default function Dataset() {
 
   return (
     <div className="mx-auto grid max-w-content gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[16rem_1fr]">
-      <aside className="lg:sticky lg:top-24 lg:self-start">
+      <section className="min-w-0 lg:order-2">
+        <div className="mb-4 flex flex-wrap items-baseline gap-3">
+          <h1 className="break-words font-display text-2xl font-bold text-fg">
+            {q ? `Results for “${q}”` : 'All units'}
+          </h1>
+          <SearchBar
+            id="dataset-search"
+            value={q}
+            onSubmit={(query) => navigate(query ? `/?q=${encodeURIComponent(query)}` : '/')}
+            className="order-last basis-full sm:order-none sm:basis-auto sm:w-56"
+          />
+          <span className="ml-auto font-mono text-xs text-faint">{total} units</span>
+        </div>
+
+        {loading ? (
+          <Spinner label="Loading dataset…" />
+        ) : error ? (
+          <EmptyState title="We couldn't load the dataset">{error}</EmptyState>
+        ) : cards.length === 0 ? (
+          <EmptyState title="Nothing here yet">
+            {q
+              ? 'No unit matches that search. Try a different title or link.'
+              : 'This dataset is empty. Public folders will appear here once an operator publishes them.'}
+          </EmptyState>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {cards.map((card) => (
+              <DataCardView
+                key={card.video_id}
+                card={card}
+                canEdit={canEditFolder(session, card.folder_id ?? '', folderRoles)}
+                onChanged={load}
+                onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Source order puts the results first — on a phone the picker and the
+          passcode promo sit below what they filter. On lg: the order classes
+          restore the sidebar to the left, so desktop is unchanged. */}
+      <aside className="lg:sticky lg:top-24 lg:self-start lg:order-1">
         <h2 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
           Browse
         </h2>
@@ -80,15 +113,15 @@ export default function Dataset() {
           </label>
           <select
             id="folder-picker"
-            defaultValue=""
+            value=""
             onChange={(e) => navigate(e.target.value || '/')}
-            className="tap-pad w-full appearance-none rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+            className={selectCls}
           >
             <option value="">All units · {total}</option>
             {flattenFolders(folders).map((f) => (
               <option key={f.id} value={`/folder/${f.id}`}>
                 {'\u00A0\u00A0'.repeat(f.depth)}
-                {f.name}
+                {folderOptionLabel(f)}
               </option>
             ))}
           </select>
@@ -126,39 +159,6 @@ export default function Dataset() {
           </Link>
         </div>
       </aside>
-
-      <section className="min-w-0">
-        <div className="mb-4 flex items-baseline justify-between gap-3">
-          <h1 className="font-display text-2xl font-bold text-fg">
-            {q ? `Results for “${q}”` : 'All units'}
-          </h1>
-          <span className="font-mono text-xs text-faint">{total} units</span>
-        </div>
-
-        {loading ? (
-          <Spinner label="Loading dataset…" />
-        ) : error ? (
-          <EmptyState title="We couldn't load the dataset">{error}</EmptyState>
-        ) : cards.length === 0 ? (
-          <EmptyState title="Nothing here yet">
-            {q
-              ? 'No unit matches that search. Try a different title or link.'
-              : 'This dataset is empty. Public folders will appear here once an operator publishes them.'}
-          </EmptyState>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {cards.map((card) => (
-              <DataCardView
-                key={card.video_id}
-                card={card}
-                canEdit={canEditFolder(session, card.folder_id ?? '', folderRoles)}
-                onChanged={load}
-                onDeleted={() => setCards((prev) => prev.filter((c) => c.video_id !== card.video_id))}
-              />
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
