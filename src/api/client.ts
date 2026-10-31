@@ -133,6 +133,24 @@ async function parseError(res: Response): Promise<never> {
 }
 
 /**
+ * The same envelope unwrapping as `parseError`, for a caller that already
+ * holds a parsed body (the multipart upload) and cannot hand `parseError` a
+ * `Response`.
+ */
+function errorFromPayload(status: number, payload: unknown): ApiError {
+  const envelope = payload as {
+    error?: { code?: string; message?: string; details?: unknown };
+  } | null;
+  const code = envelope?.error?.code ?? `http_${status}`;
+  const message =
+    envelope?.error?.message ??
+    (status >= 500
+      ? 'The API is not responding. Check that the backend is running.'
+      : `Request failed (${status}).`);
+  return new ApiError(code, message, status, envelope?.error?.details ?? null);
+}
+
+/**
  * `authToken` overrides the session bearer for this one call. It is how the
  * bot's `?t=` single-video guest token authenticates without replacing the
  * visitor's own session: omit it to use the session (the default), or pass a
@@ -335,6 +353,69 @@ export interface CreateVideoRequest {
 export const createVideo = (payload: CreateVideoRequest): Promise<Video> =>
   request<Video>('/videos', { method: 'POST', body: JSON.stringify(payload) });
 
+export interface UploadVideoOptions {
+  title?: string;
+  /** Run the usual extract/transcribe chain. Defaults to true, like the link path. */
+  startTranscription?: boolean;
+}
+
+/**
+ * Upload a file the caller already has on their device.
+ *
+ * Multipart, so it cannot go through `request()` (which JSON-encodes a string
+ * body). Mirrors the admin console's implementation: same field names, same
+ * 409-duplicate passthrough, and the same error envelope unwrapping. The
+ * caller keeps `request()` untouched for every JSON endpoint.
+ */
+export const uploadVideo = async (
+  file: File,
+  opts: UploadVideoOptions = {},
+): Promise<Video> => {
+  if (isMockEnabled()) {
+    throw new ApiError('not_supported', 'File upload is not available in demo data.', 400);
+  }
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('start_transcription', String(opts.startTranscription ?? true));
+  if (opts.title) form.append('title', opts.title);
+
+  const token = currentToken();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/videos/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+  } catch {
+    throw new ApiError(
+      'network_error',
+      'Could not reach the recsterio API. Check that the backend is running.',
+      0,
+    );
+  }
+
+  // Parse once so a 409 can carry the existing unit, exactly like admin.
+  const text = await res.text();
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+  if (!res.ok) {
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+    const duplicate = (payload as { video?: Video } | null)?.video;
+    if (res.status === 409 && duplicate) return duplicate;
+    throw errorFromPayload(res.status, payload);
+  }
+  return payload as Video;
+};
+
 export const getVideo = (videoId: string): Promise<VideoDetail> =>
   request<VideoDetail>(`/videos/${videoId}`);
 
@@ -407,10 +488,14 @@ export const disconnectDrive = (provider: string): Promise<void> =>
 export const startCloudUpload = (
   backend: string,
   filename?: string,
+  /** Real byte size. The API turns it into the upload session's declared
+   * content length; without it the session declares the server's max upload
+   * size (512 MB), and the provider rejects the much smaller final body. */
+  size?: number,
 ): Promise<CloudUpload> =>
   request<CloudUpload>('/cloud/uploads', {
     method: 'POST',
-    body: JSON.stringify({ backend, filename }),
+    body: JSON.stringify({ backend, filename, size }),
   });
 
 export const completeCloudUpload = (
@@ -422,6 +507,99 @@ export const completeCloudUpload = (
     method: 'POST',
     body: JSON.stringify({ provider_file_id: providerFileId, ...meta }),
   });
+
+/**
+ * PUT the bytes straight to the provider's resumable session URL.
+ *
+ * XHR rather than fetch on purpose: fetch has no upload-progress event, and the
+ * contributor needs to see a real percentage while a large file is on the wire.
+ * The response bodies we care about are small JSON records — Google answers
+ * `{"id": "<drive file id>"}` — so `id` is surfaced and everything else is
+ * ignored. Callers use `onProgress` and an AbortSignal to cancel.
+ */
+export function putFileToProvider(
+  uploadUrl: string,
+  uploadHeaders: Record<string, string>,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<{ id?: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl, true);
+    for (const [name, value] of Object.entries(uploadHeaders)) {
+      // Content-Length is a forbidden request header: the browser computes it
+      // from the body, and trying to set it is a no-op (or throws in strict
+      // browsers). Every other header the backend returned is ours to send.
+      if (name.toLowerCase() === 'content-length') continue;
+      try {
+        xhr.setRequestHeader(name, value);
+      } catch {
+        // A header the browser refuses to let scripts set. The upload still
+        // works without it — the provider session already knows the file.
+      }
+    }
+
+    // Mark the body as the FINAL chunk with its real total. A resumable
+    // session treats a request without Content-Range as one chunk of many and
+    // rejects anything under 256 KB ("the number of bytes uploaded is required
+    // to be equal or greater than 262144"), so a single-shot upload must state
+    // `bytes 0-(n-1)/n` or the provider answers 400.
+    if (file.size > 0) {
+      try {
+        xhr.setRequestHeader('Content-Range', `bytes 0-${file.size - 1}/${file.size}`);
+      } catch {
+        /* header refused by the browser — the 400 surfaces as an upload error */
+      }
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable && event.total > 0) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        let body: { id?: string } | null = null;
+        try {
+          body = xhr.responseText ? (JSON.parse(xhr.responseText) as { id?: string }) : null;
+        } catch {
+          body = null;
+        }
+        resolve(body ?? {});
+        return;
+      }
+      reject(
+        new ApiError(
+          'provider_upload_failed',
+          `The drive did not accept the upload (${xhr.status}).`,
+          xhr.status,
+        ),
+      );
+    };
+    xhr.onerror = () =>
+      reject(
+        new ApiError(
+          'network_error',
+          'Could not reach the drive. Check your connection and try again.',
+          0,
+        ),
+      );
+    // Cancellation is a user action, not a failure — the caller resets to idle.
+    xhr.onabort = () => reject(new DOMException('Upload cancelled.', 'AbortError'));
+
+    if (signal) {
+      if (signal.aborted) {
+        // abort() before send() dispatches no abort event, so reject directly
+        // rather than leaving the caller's promise unsettled forever.
+        reject(new DOMException('Upload cancelled.', 'AbortError'));
+        return;
+      }
+      signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+    xhr.send(file);
+  });
+}
 
 /* ------------------------------------------------------- binary / blobs */
 

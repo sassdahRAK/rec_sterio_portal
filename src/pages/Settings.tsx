@@ -462,7 +462,33 @@ export default function Settings() {
         Keep your contributed video bytes on your own cloud. Connect a drive, then choose it when you
         upload a video. The file goes straight to your drive and the dataset catalogues it.
       </p>
-      {available && (!available.google || !available.onedrive) ? (
+      {/* Signed-in visitors without a Google Drive get the offer here, above the
+          no-storage notice. Disappears the moment a google link exists, so it
+          never nags someone who already connected one. */}
+      {available?.google === true && !links.some((l) => l.provider === 'google') ? (
+        <div
+          role="status"
+          className="card mt-3 border-warn/40 bg-warn-soft p-4 text-sm text-warn"
+        >
+          <p className="font-medium">
+            Connect your Google Drive to keep your videos in your own Drive
+          </p>
+          <p className="mt-1">
+            Once it's connected, you can choose to keep each upload in your Drive instead of the
+            project's server, which keeps the server's disk free. Your files appear at
+            drive.google.com under My Drive, in the RecSterIO folder, where you can play, download
+            or delete them yourself. Connecting takes about 30 seconds.
+          </p>
+          <p className="mt-1">
+            RecSterio can only see the files it created itself, through the drive.file
+            permission, so it can't browse the rest of your Drive.
+          </p>
+        </div>
+      ) : null}
+      {/* Only when the server offers no provider at all. With at least one
+          provider available (e.g. Google, even if not yet linked) this must not
+          render — otherwise it contradicts the yellow connect banner above. */}
+      {available && !available.google && !available.onedrive ? (
         <div className="mt-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-dim">
           <strong className="font-semibold text-fg">Drive storage isn't enabled yet.</strong>{' '}
           An operator has to connect a storage account first; after that you can link your own
