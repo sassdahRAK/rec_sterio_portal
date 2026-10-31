@@ -301,7 +301,7 @@ export default function Scrape() {
       if (!put.id) {
         setPhase({
           kind: 'error',
-          message: 'Google did not confirm the upload — try again.',
+          message: 'Google did not confirm the upload. Try again.',
         });
         return;
       }
