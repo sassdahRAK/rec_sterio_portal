@@ -15,6 +15,35 @@ import { videoStatusLabel } from '../lib/statusLabels';
 import { btnDanger, btnNeutral, btnPrimary, iconBtn, inputCls } from './ui';
 
 /**
+ * Terminal video statuses that can leave a unit without any transcript row.
+ * Every other value in `VIDEO_STATUS_LABELS` (pending, downloading, downloaded,
+ * uploading, transcribing) is a pre-transcript stage that is still moving.
+ */
+const TERMINAL_WITHOUT_TRANSCRIPT = new Set(['transcribed', 'quarantined']);
+
+/**
+ * Honest wording for the transcript slot when `transcript_preview` is empty.
+ *
+ * One old sentence claimed "still processing" for every empty slot, which is
+ * only true for a unit that has no transcript row yet and is still moving. A
+ * row whose content is empty means processing finished with no speech, and a
+ * failed unit is not processing at all.
+ */
+function transcriptFallback(card: DataCardModel): string {
+  if (card.transcript_id) {
+    // The transcript exists, so nothing is pending — its content is simply empty.
+    return 'This transcript is empty — no speech was detected.';
+  }
+  if (card.status === 'failed') {
+    return 'Processing failed. Ask an admin to retry.';
+  }
+  if (TERMINAL_WITHOUT_TRANSCRIPT.has(card.status)) {
+    return 'No transcript was produced for this unit.';
+  }
+  return `This unit is still processing (${videoStatusLabel(card.status)}).`;
+}
+
+/**
  * One dataset unit: media, audio and transcript, with the Raw/Cleaned badge.
  *
  * This is the page's workhorse — the media area, a real waveform for the audio
@@ -313,7 +342,7 @@ export default function DataCardView({
               }`}
             >
               {card.transcript_preview || (
-                <span className="text-faint">No transcript yet. This unit is still processing.</span>
+                <span className="text-faint">{transcriptFallback(card)}</span>
               )}
             </p>
             {overflowing || expanded ? (
