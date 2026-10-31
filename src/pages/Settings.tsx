@@ -102,16 +102,16 @@ const providerLabel = (p: CloudBackend): string => (p === 'google' ? 'Google Dri
 function cloudErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === 'cloud_auth_rejected') {
-      return 'That authorization link was already used or has expired — start Connect again.';
+      return 'That authorization link was already used or has expired. Start Connect again.';
     }
     if (err.code === 'provider_not_configured') {
-      return "This provider isn't configured on the server — ask the operator.";
+      return "This provider isn't configured on the server. Ask the operator.";
     }
     if (err.code === 'cloud_token_key_required') {
-      return "The server can't store drive tokens securely yet — ask the operator to set CLOUD_TOKEN_KEY.";
+      return "The server can't store drive tokens securely yet. Ask the operator to set CLOUD_TOKEN_KEY.";
     }
     if (err.code === 'upstream_error') {
-      return 'The provider rejected the handshake — start Connect again; if it repeats, ask the operator.';
+      return 'The provider rejected the handshake. Start Connect again. If it repeats, ask the operator.';
     }
     const details = Array.isArray(err.details)
       ? (err.details as { field?: string; issue?: string }[])
@@ -120,12 +120,12 @@ function cloudErrorMessage(err: unknown): string {
       err.code === 'validation_failed' &&
       details.some((d) => d.field === 'redirect_uri' && d.issue === 'foreign_origin')
     ) {
-      return "That link doesn't match this site — paste the full URL from the address bar after you authorized.";
+      return "That link doesn't match this site. Paste the full URL from the address bar after you authorized.";
     }
     const issue = details[0]?.issue;
     return issue ? `${err.message} (${issue})` : err.message;
   }
-  return 'Could not reach the server — check your connection and try again.';
+  return 'Could not reach the server. Check your connection and try again.';
 }
 
 /**
@@ -460,7 +460,7 @@ export default function Settings() {
       <h1 className="font-display text-xl font-semibold text-fg">Settings</h1>
       <p className="mt-1 text-sm text-dim">
         Keep your contributed video bytes on your own cloud. Connect a drive, then choose it when you
-        upload a video — the file goes straight to your drive and the dataset catalogues it.
+        upload a video. The file goes straight to your drive and the dataset catalogues it.
       </p>
       {available && (!available.google || !available.onedrive) ? (
         <div className="mt-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-dim">
@@ -490,7 +490,7 @@ export default function Settings() {
                   ) : null}
                   {!connected && offered === true && clientIdMissing ? (
                     <p className="mt-1 text-xs text-faint">
-                      Connecting {p.label} isn't available on this site yet — ask the operator to
+                      Connecting {p.label} isn't available on this site yet. Ask the operator to
                       enable it.
                     </p>
                   ) : null}
@@ -673,7 +673,7 @@ function PasteCodeDialog({
       >
         <h2 className="font-display text-base font-semibold text-fg">Connect {label}</h2>
         <label className={`${labelCls} mt-3`} htmlFor="cloud-paste">
-          Paste the URL you were sent back to — or just the code
+          Paste the URL you were sent back to, or just the code
         </label>
         <textarea
           id="cloud-paste"
@@ -684,7 +684,7 @@ function PasteCodeDialog({
         />
         <p className="mt-1.5 text-xs text-faint">
           After you authorize, the browser is sent back to{' '}
-          <span className="font-mono">{cloudRedirectUri()}?code=…</span> — copy the whole address-bar
+          <span className="font-mono">{cloudRedirectUri()}?code=…</span>. Copy the whole address-bar
           URL here.
         </p>
         {error ? (

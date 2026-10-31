@@ -15,6 +15,13 @@ export interface DataCard {
   title: string | null;
   source_url?: string | null;
   status: string;
+  /**
+   * Live processing state, 0-100. Present on every card so a unit that is still
+   * downloading or transcribing can show where it is instead of looking broken.
+   */
+  progress: number;
+  /** Why processing stopped, when `status` is `failed`; null otherwise. */
+  error?: string | null;
   duration_seconds: number | null;
   thumbnail_url?: string | null;
   folder_id?: string | null;

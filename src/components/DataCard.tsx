@@ -25,11 +25,18 @@ export default function DataCardView({
   canEdit,
   onChanged,
   onDeleted,
+  authToken,
 }: {
   card: DataCardModel;
   canEdit: boolean;
   onChanged: () => void;
   onDeleted: () => void;
+  /**
+   * Optional per-call bearer for this card's media bytes — the bot's `?t=`
+   * single-video guest token. Omitted everywhere else, where the media fetch
+   * keeps using the visitor's session exactly as before.
+   */
+  authToken?: string;
 }) {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -58,7 +65,7 @@ export default function DataCardView({
     setVideoLoading(true);
     setError(null);
     try {
-      setVideoUrl(await playableMediaUrl(card.media_url));
+      setVideoUrl(await playableMediaUrl(card.media_url, authToken));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not play this video.');
     } finally {
@@ -90,7 +97,7 @@ export default function DataCardView({
     }
     setError(null);
     try {
-      const url = await playableMediaUrl(card.audio_url);
+      const url = await playableMediaUrl(card.audio_url, authToken);
       const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;
       audio.src = url;
@@ -226,7 +233,7 @@ export default function DataCardView({
             ) : (
               <span className="text-xs text-faint">
                 {driveOffline
-                  ? "This unit's storage is offline — the contributor disconnected their drive."
+                  ? "This unit's storage is offline. The contributor disconnected their drive."
                   : card.status === 'failed'
                     ? 'No media on disk.'
                     : `Video is still being prepared (${videoStatusLabel(card.status)}).`}
@@ -253,7 +260,7 @@ export default function DataCardView({
         <button
           type="button"
           className={iconBtn}
-          onClick={() => downloadAudio(card.video_id, card.title ?? undefined)}
+          onClick={() => downloadAudio(card.video_id, card.title ?? undefined, authToken)}
           aria-label={`Download audio for ${title}`}
           title="Download audio (.wav)"
         >
@@ -306,7 +313,7 @@ export default function DataCardView({
               }`}
             >
               {card.transcript_preview || (
-                <span className="text-faint">No transcript yet — this unit is still processing.</span>
+                <span className="text-faint">No transcript yet. This unit is still processing.</span>
               )}
             </p>
             {overflowing || expanded ? (

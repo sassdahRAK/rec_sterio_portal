@@ -204,7 +204,7 @@ export default function Scrape() {
           <h1 className="font-display text-xl font-bold text-fg">Sign in to add to the dataset</h1>
           <p className="mt-2 text-sm text-dim">
             Adding a link creates a new unit in the dataset. Browsing public datasets needs no
-            account — only adding does.
+            account. Only adding does.
           </p>
           <Link to="/login" className={`${btnPrimary} mt-4`}>
             Sign in
@@ -284,7 +284,7 @@ export default function Scrape() {
           <p className="font-medium">This link is already in the dataset.</p>
           <p className="mt-1">
             {phase.videoId
-              ? "You don't need to add it twice — the unit is ready to open."
+              ? "You don't need to add it twice. The unit is ready to open."
               : 'Ask whoever added it for access, or open the folder it was filed into.'}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">

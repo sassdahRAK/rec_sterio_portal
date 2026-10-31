@@ -74,7 +74,7 @@ export default function App() {
       <footer className="border-t border-line px-4 pb-24 pt-5 sm:px-6 sm:pb-5">
         <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-3">
           <p className="text-2xs text-faint">
-            RecSterio — Khmer–English speech dataset. Video, audio and transcript, cleaned by hand.
+            RecSterio: Khmer and English speech dataset. Video, audio and transcript, cleaned by hand.
           </p>
         </div>
       </footer>

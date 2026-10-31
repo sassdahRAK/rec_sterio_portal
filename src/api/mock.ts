@@ -62,11 +62,11 @@ const F5 = uid(0xf5);
 const mockDriveLinks: { id: string; provider: 'google' | 'onedrive'; account_email: string; connected_at: string }[] = [];
 
 const mockFolders: MockFolder[] = [
-  { id: F1, name: 'TvNa Phnom Penh — places', description: 'The public demo dataset: places around the capital, recorded and transcribed.', visibility: 'public', parent_id: null, position: 0 },
+  { id: F1, name: 'TvNa Phnom Penh: places', description: 'The public demo dataset: places around the capital, recorded and transcribed.', visibility: 'public', parent_id: null, position: 0 },
   { id: F2, name: 'Cafés & study spots', description: 'Laptop-friendly corners students actually work in.', visibility: 'public', parent_id: F1, position: 0 },
   { id: F3, name: 'Street & market', description: 'Food, noise and the real volume of the city.', visibility: 'public', parent_id: F1, position: 1 },
   { id: F4, name: 'Classroom & campus audio', description: null, visibility: 'public', parent_id: null, position: 1 },
-  { id: F5, name: 'Reviewer set — not yet public', description: 'Unverified clips. Demo passcode: TVNA-2026', visibility: 'private', parent_id: null, position: 2 },
+  { id: F5, name: 'Reviewer set: not yet public', description: 'Unverified clips. Demo passcode: TVNA-2026', visibility: 'private', parent_id: null, position: 2 },
 ];
 
 /* ---------------------------------------------------------------- videos */
@@ -91,7 +91,7 @@ interface MockVideo {
 
 const videoSeed: Array<Partial<MockVideo> & { seed: number }> = [
   {
-    seed: 1, folder_id: F2, title: 'Six Mile Coffee — owner interview',
+    seed: 1, folder_id: F2, title: 'Six Mile Coffee: owner interview',
     source_url: 'https://www.youtube.com/watch?v=mock01', platform: 'youtube',
     status: 'transcribed', progress: 100, duration_seconds: 38.2, file_size: 8_412_001,
     created_at: iso(8_600_000),
@@ -103,31 +103,31 @@ const videoSeed: Array<Partial<MockVideo> & { seed: number }> = [
     created_at: iso(7_200_000),
   },
   {
-    seed: 3, folder_id: F3, title: 'Orussey market — lunch stall banter',
+    seed: 3, folder_id: F3, title: 'Orussey market: lunch stall banter',
     source_url: 'https://www.facebook.com/watch/?v=8823410291', platform: 'facebook',
     status: 'transcribed', progress: 100, duration_seconds: 47.8, file_size: 11_204_552,
     created_at: iso(5_400_000),
   },
   {
-    seed: 4, folder_id: F3, title: 'Night market food reel — code-switching',
+    seed: 4, folder_id: F3, title: 'Night market food reel: code-switching',
     source_url: 'https://www.instagram.com/reel/Cmock04/', platform: 'instagram',
     status: 'transcribed', progress: 100, duration_seconds: 15.9, file_size: 3_020_448,
     created_at: iso(3_600_000),
   },
   {
-    seed: 5, folder_id: F4, title: 'RUCA study group — campus café',
+    seed: 5, folder_id: F4, title: 'RUCA study group: campus café',
     source_url: 'https://www.youtube.com/watch?v=mock05', platform: 'youtube',
     status: 'transcribed', progress: 100, duration_seconds: 62.5, file_size: 15_402_112,
     created_at: iso(2_400_000),
   },
   {
-    seed: 6, folder_id: F1, title: 'Bridge Island coworking — afternoon',
+    seed: 6, folder_id: F1, title: 'Bridge Island coworking: afternoon',
     source_url: 'https://www.youtube.com/watch?v=mock06', platform: 'youtube',
     status: 'transcribed', progress: 100, duration_seconds: 29.1, file_size: 6_890_221,
     created_at: iso(1_200_000),
   },
   {
-    seed: 7, folder_id: F3, title: 'Student hub interview — Diamond Island',
+    seed: 7, folder_id: F3, title: 'Student hub interview: Diamond Island',
     source_url: 'https://www.tiktok.com/@phnompenhwalks/video/7312049882', platform: 'tiktok',
     status: 'transcribing', progress: 72, duration_seconds: 33.6, file_size: 7_120_880,
     created_at: iso(400_000),
@@ -206,13 +206,13 @@ let transcripts: MockTranscriptRow[] = [
     seg(15.4, 21.2, 'en', 'The wifi holds up for video calls, which is rare here.'),
   ]),
   t(102, uid(2), 1, false, 'whisper', [
-    seg(0, 5.1, 'en', 'This is the second floor — quiet after ten.'),
+    seg(0, 5.1, 'en', 'This is the second floor. It is quiet after ten.'),
     seg(5.1, 11.6, 'km', 'កន្លែងអង្គេនស្អាត ប៉ុន្តែពេលថ្ងៃចន្ទ គេពេញ។'),
     seg(11.6, 16.0, 'en', 'Iced latte is thirty-five hundred riel.'),
   ]),
   t(103, uid(3), 1, false, 'whisper', [
     seg(0, 6.3, 'km', 'បងអើយ ម្ហូបអីពិសេសថ្ងៃនេះ?'),
-    seg(6.3, 13.8, 'en', 'Try the bai cha呵 — ah sorry, the fish amok, it is fresh today.'),
+    seg(6.3, 13.8, 'en', 'Try the bai cha. Ah sorry, the fish amok is fresh today.'),
     seg(13.8, 22.4, 'km', 'តម្លៃបួនរយរៀល ហើយមានបាយផង។'),
   ]),
   t(104, uid(4), 1, true, 'merged', [
@@ -225,12 +225,12 @@ let transcripts: MockTranscriptRow[] = [
     seg(7.4, 14.1, 'km', 'គ្រូបង្រៀនក៏មកអង្គេន ធ្វើការជាមួយនិស្សិត។'),
   ]),
   t(106, uid(6), 1, true, 'manual', [
-    seg(0, 5.6, 'en', 'Two power sockets per table — that is the whole review.'),
+    seg(0, 5.6, 'en', 'Two power sockets per table. That is the whole review.'),
     seg(5.6, 12.8, 'km', 'តែស្ករត្នោតអรសណាស់ តម្លៃសមរម្យ។'),
     seg(12.8, 18.4, 'en', 'And the staff will not kick you out at closing time.'),
   ]),
   t(108, uid(8), 1, false, 'whisper', [
-    seg(0, 5.9, 'en', 'Cocktails are nine dollars, coffee six — rooftop over the river.'),
+    seg(0, 5.9, 'en', 'Cocktails are nine dollars, coffee six. Rooftop over the river.'),
     seg(5.9, 11.0, 'km', 'ទេសភាពល្អ ប៉ុន្តែតម្លៃខ្ពស់សម្រាប់និស្សិត។'),
   ]),
 ];
@@ -241,7 +241,7 @@ let comments: FolderComment[] = [
   {
     id: uid(201), folder_id: F1, author_id: null,
     author_label: 'user:sokha@test.local',
-    body: 'Transcript 3 has one number wrong (four hundred, not four thousand riel) — flagged for cleaning.',
+    body: 'Transcript 3 has one number wrong (four hundred, not four thousand riel). Flagged for cleaning.',
     created_at: iso(2_000_000),
   },
 ];
@@ -294,6 +294,8 @@ function cardFor(video: MockVideo): DataCard {
     title: video.title,
     source_url: video.source_url,
     status: video.status,
+    progress: video.progress,
+    error: video.error,
     duration_seconds: video.duration_seconds,
     thumbnail_url: video.thumbnail_url,
     folder_id: video.folder_id,
@@ -502,7 +504,7 @@ export function mockZipBlob(folderId: string): Blob {
   entries.push({
     name: `${rootName}/README.txt`,
     data: text.encode(
-      'recsterio demo export — generated in the browser with ?mock=1.\n' +
+      'recsterio demo export. Generated in the browser with ?mock=1.\n' +
       'Audio is a synthesized tone; there are no video bytes in demo data.\n' +
       'The folder layout mirrors the real export: <folder>/<unit>/{video,audio,transcript}.\n',
     ),
@@ -605,7 +607,7 @@ export function mockRequest(
   if (segments[0] === 'public' && segments[1] === 'folders' && segments[2] && method === 'GET') {
     const folder = mockFolders.find((item) => item.id === segments[2]);
     if (!folder || !canSee(folder, token)) {
-      return err(404, 'not_found', 'Folder not found. It may be private — sign in or unlock it with a passcode.');
+      return err(404, 'not_found', 'Folder not found. It may be private. Sign in or unlock it with a passcode.');
     }
     return json(publicFolderNode(folder, token));
   }

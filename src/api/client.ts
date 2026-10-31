@@ -132,8 +132,36 @@ async function parseError(res: Response): Promise<never> {
   throw new ApiError(code, message, res.status, details);
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = currentToken();
+/**
+ * `authToken` overrides the session bearer for this one call. It is how the
+ * bot's `?t=` single-video guest token authenticates without replacing the
+ * visitor's own session: omit it to use the session (the default), or pass a
+ * token string to scope just this request. A 401 on an overridden request does
+ * not fire the session-expired event, because it was not the session that
+ * failed — the guest link was.
+ */
+/* ---------------------------------------------------- GET dedupe/timeout */
+
+/** Abort a GET that has not answered in this long. */
+const GET_TIMEOUT_MS = 10_000;
+
+/**
+ * In-flight GETs, keyed by `method+url+bearer`. React StrictMode double-
+ * invokes mount effects, so every page load issues two identical requests;
+ * a second identical GET issued while one is pending joins the same promise
+ * instead of hitting the network twice. The entry is removed as soon as the
+ * request settles, so polls and retries still get fresh responses.
+ */
+const inflightGets = new Map<string, Promise<unknown>>();
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  authToken?: string | null,
+): Promise<T> {
+  const sessionToken = currentToken();
+  const token = authToken === undefined ? sessionToken : authToken;
+  const tokenOverridden = authToken !== undefined && authToken !== sessionToken;
   if (isMockEnabled()) {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
     const result = mockRequest(init.method ?? 'GET', path, body, token);
@@ -156,13 +184,67 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (res.status === 401) {
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+  const url = `${API_BASE}${path}`;
+  const isGet = (init.method ?? 'GET') === 'GET';
+  const key = `${url}::${token ?? ''}`;
+
+  const run = async (): Promise<T> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), GET_TIMEOUT_MS);
+    const onCallerAbort = () => ctrl.abort();
+    init.signal?.addEventListener('abort', onCallerAbort);
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers, signal: ctrl.signal });
+    } catch (err) {
+      if (ctrl.signal.aborted && !init.signal?.aborted) {
+        throw new ApiError('timeout', 'The request timed out. Please try again.', 408);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      init.signal?.removeEventListener('abort', onCallerAbort);
+    }
+    if (res.status === 401 && !tokenOverridden) {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+    if (!res.ok) return parseError(res);
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  };
+
+  if (!isGet) return run();
+
+  const pending = inflightGets.get(key);
+  if (pending) return pending as Promise<T>;
+  const p = run().finally(() => inflightGets.delete(key));
+  inflightGets.set(key, p);
+  return p;
+}
+
+/**
+ * Retry a first-load fetch a couple of times with backoff before the caller
+ * shows its error state. Used for non-silent loads only — the auto-refresh
+ * poll must not stack retries behind a slow backend.
+ */
+export async function retryGet<T>(
+  run: () => Promise<T>,
+  delaysMs: readonly number[] = [1000, 3000],
+  shouldRetry: (err: unknown) => boolean = () => true,
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await run();
+    } catch (err) {
+      // A caller that knows the failure is terminal (e.g. a 401/403 on a
+      // token-overridden request) opts out of the backoff instead of paying
+      // the retry delays before showing the same error.
+      if (!shouldRetry(err) || attempt >= delaysMs.length) throw err;
+      await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+      attempt += 1;
+    }
   }
-  if (!res.ok) return parseError(res);
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
 }
 
 /* ------------------------------------------------------------------ public */
@@ -183,8 +265,15 @@ export interface CardQuery {
   page_size?: number;
 }
 
-export const listCards = (query: CardQuery = {}): Promise<DatasetCardList> =>
-  request<DatasetCardList>(`/dataset/cards${qs(query as Query)}`);
+/**
+ * The cards list. `token` is an optional per-call bearer — the bot's `?t=`
+ * single-video guest token — and leaves the visitor's session untouched.
+ */
+export const listCards = (
+  query: CardQuery = {},
+  token?: string | null,
+): Promise<DatasetCardList> =>
+  request<DatasetCardList>(`/dataset/cards${qs(query as Query)}`, {}, token);
 
 export const guestSession = (): Promise<GuestSession> =>
   request<GuestSession>('/auth/guest', { method: 'POST' });
@@ -339,9 +428,15 @@ export const completeCloudUpload = (
 /**
  * Fetch a file as a blob, attaching the bearer token. Used for the ZIP export
  * and for media that lives behind a passcode or share link.
+ *
+ * `authToken` overrides the session bearer for this one fetch — the same rule
+ * as `request`: omit it to use the session, or pass the bot's single-video
+ * `?t=` guest token so a logged-out visitor's media request authenticates
+ * without touching (or requiring) a session.
  */
-async function fetchBlob(path: string): Promise<Blob> {
-  const token = currentToken();
+async function fetchBlob(path: string, authToken?: string | null): Promise<Blob> {
+  const sessionToken = currentToken();
+  const token = authToken === undefined ? sessionToken : authToken;
   if (isMockEnabled()) {
     try {
       return mockBlob(path, token);
@@ -378,8 +473,12 @@ export async function downloadFolderZip(folderId: string, folderName: string): P
   saveBlob(blob, `${safe}.zip`);
 }
 
-export async function downloadAudio(videoId: string, title?: string | null): Promise<void> {
-  const blob = await fetchBlob(`/videos/${videoId}/audio`);
+export async function downloadAudio(
+  videoId: string,
+  title?: string | null,
+  authToken?: string | null,
+): Promise<void> {
+  const blob = await fetchBlob(`/videos/${videoId}/audio`, authToken);
   const safe = (title ?? 'audio').replace(/[^\w.-]+/g, '_').slice(0, 80) || 'audio';
   saveBlob(blob, `${safe}.wav`);
 }
@@ -418,16 +517,21 @@ function toApiRelative(url: string): string {
  * A URL an `<audio>`/`<video>` element can actually play.
  *
  * With no token the URL is public and streams directly (so the browser can
- * range-request it). With a token — a passcode or share link — the request
- * must carry the header, so the bytes are fetched once as a blob. The caller
- * owns revoking the returned object URL.
+ * range-request it). With a token — a passcode, a share link, or the bot's
+ * `?t=` guest token passed as `authToken` — the request must carry the header,
+ * so the bytes are fetched once as a blob. The caller owns revoking the
+ * returned object URL.
  */
-export async function playableMediaUrl(mediaUrl: string): Promise<string> {
+export async function playableMediaUrl(
+  mediaUrl: string,
+  authToken?: string | null,
+): Promise<string> {
   const path = toApiRelative(mediaUrl);
-  const token = currentToken();
+  const sessionToken = currentToken();
+  const token = authToken === undefined ? sessionToken : authToken;
   // Demo mode has no streamable origin: synthesize the audio as a blob so the
   // player, the seek bar and the duration all behave like the real thing.
   if (!token && !isMockEnabled()) return `${API_BASE}${path}`;
-  const blob = await fetchBlob(path);
+  const blob = await fetchBlob(path, authToken);
   return URL.createObjectURL(blob);
 }

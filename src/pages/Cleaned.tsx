@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { listCards } from '../api/client';
+import { listCards, retryGet } from '../api/client';
 import type { DataCard as DataCardModel } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
@@ -9,6 +9,7 @@ import Spinner from '../components/Spinner';
 import { btnNeutral, btnPrimary } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
+import { useAutoRefresh } from '../lib/useAutoRefresh';
 
 /**
  * The human-corrected subset (instruction.txt #8). The badge is the filter:
@@ -24,26 +25,46 @@ export default function Cleaned() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    listCards(q ? { cleaned: true, q } : { cleaned: true })
+  // `silent` mode for the auto-refresh poll: no `loading` flicker, transient
+  // errors are swallowed. Ordering uses `lastAppliedSeq`: any success newer
+  // than the last applied is kept (a StrictMode duplicate that lands after
+  // its twin succeeded is still a valid success), and a failure only raises
+  // the banner when there are no cards to keep — the banner renders behind
+  // `cards.length === 0`. First loads retry twice (1s/3s) before erroring.
+  const reqSeq = useRef(0);
+  const lastAppliedSeq = useRef(0);
+  const load = useCallback((silent = false) => {
+    const seq = ++reqSeq.current;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    const run = () => listCards(q ? { cleaned: true, q } : { cleaned: true });
+    (silent ? run() : retryGet(run))
       .then((res) => {
-        if (!cancelled) setCards(res.items);
+        if (seq < lastAppliedSeq.current) return;
+        lastAppliedSeq.current = seq;
+        setCards(res.items);
+        setError(null);
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message);
+        if (seq < lastAppliedSeq.current) return;
+        if (!silent) setError(err.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (seq === reqSeq.current && !silent) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [q]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Cleaned units edited or newly corrected appear without a manual refresh.
+  const poll = useCallback(() => {
+    load(true);
+  }, [load]);
+  useAutoRefresh(poll, { intervalMs: 15_000 });
 
   return (
     <div className="mx-auto max-w-content px-4 py-6 sm:px-6">
@@ -75,7 +96,7 @@ export default function Cleaned() {
 
       {loading ? (
         <Spinner label="Loading cleaned units…" />
-      ) : error ? (
+      ) : error && cards.length === 0 ? (
         <EmptyState
           title="We couldn't load this view"
           action={

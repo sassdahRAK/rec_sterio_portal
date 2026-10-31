@@ -1,7 +1,7 @@
 /** Formatting helpers shared across the portal. */
 
 export function formatDuration(seconds: number | null | undefined): string {
-  if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return '—';
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return 'None';
   const total = Math.max(0, Math.round(seconds));
   const m = Math.floor(total / 60);
   const s = total % 60;
@@ -13,7 +13,7 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 export function formatBytes(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return '—';
+  if (!bytes || bytes <= 0) return 'None';
   const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
   let unit = 0;
@@ -25,9 +25,9 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'None';
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
+  if (Number.isNaN(then)) return 'None';
   const diff = Date.now() - then;
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'just now';

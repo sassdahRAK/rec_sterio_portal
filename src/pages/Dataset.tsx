@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
-import { listCards, listPublicFolders } from '../api/client';
+import { listCards, listPublicFolders, retryGet } from '../api/client';
 import type { DataCard as DataCardModel, PublicFolder } from '../api/types';
 import DataCardView from '../components/DataCard';
 import EmptyState from '../components/EmptyState';
@@ -11,6 +11,7 @@ import { btnNeutral, btnPrimary, selectCls } from '../components/ui';
 import { canEditFolder, useSession } from '../store/auth';
 import { useFolderRoles } from '../lib/access';
 import { flattenFolders, folderOptionLabel } from '../lib/folders';
+import { useAutoRefresh } from '../lib/useAutoRefresh';
 
 /**
  * The public dataset: everything a visitor may read, organised by folder and
@@ -30,32 +31,55 @@ export default function Dataset() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // A named loader so a saved edit can refresh the cards it changed. The
-  // `cancelled` flag also stops an earlier search from overwriting a newer one
-  // when two fetches overlap.
-  const load = useCallback(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    Promise.all([listPublicFolders(), listCards(q ? { q } : {})])
+  // A named loader so a saved edit can refresh the cards it changed.
+  // `silent` is used by the auto-refresh poll: it leaves `loading` untouched
+  // (no spinner flicker), keeps the current query/folders/scroll, and swallows
+  // transient errors instead of replacing the visible list with the error
+  // state. Ordering is decided by `lastAppliedSeq`: any successful response
+  // newer than the last one applied is used, and an older one is dropped —
+  // crucially, a duplicate StrictMode mount request whose twin already
+  // succeeded is not treated as "stale". A failure only sets the error
+  // banner, and the banner is rendered only when there is no data to keep
+  // (`cards.length === 0` below), so one transient blip never hides good
+  // cards. The first load retries twice (1s/3s) before showing the banner.
+  const reqSeq = useRef(0);
+  const lastAppliedSeq = useRef(0);
+  const load = useCallback((silent = false) => {
+    const seq = ++reqSeq.current;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    const run = () =>
+      Promise.all([listPublicFolders(), listCards(q ? { q } : {})]);
+    (silent ? run() : retryGet(run))
       .then(([folderList, cardList]) => {
-        if (cancelled) return;
+        if (seq < lastAppliedSeq.current) return;
+        lastAppliedSeq.current = seq;
         setFolders(folderList.items);
         setCards(cardList.items);
         setTotal(cardList.total);
+        setError(null);
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message);
+        if (seq < lastAppliedSeq.current) return;
+        if (!silent) setError(err.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (seq === reqSeq.current && !silent) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [q]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Newly published units appear without a manual refresh. The hook pauses
+  // while the tab is hidden and refetches the moment it is visible again.
+  const poll = useCallback(() => {
+    load(true);
+  }, [load]);
+  useAutoRefresh(poll, { intervalMs: 15_000 });
 
   return (
     <div className="mx-auto grid max-w-content gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[16rem_1fr]">
@@ -81,7 +105,7 @@ export default function Dataset() {
 
         {loading ? (
           <Spinner label="Loading dataset…" />
-        ) : error ? (
+        ) : error && cards.length === 0 ? (
           <EmptyState
             title="We couldn't load the dataset"
             action={

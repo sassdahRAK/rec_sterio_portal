@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useNavHistory } from '../lib/useNavHistory';
 import { signOut, useIsSignedIn, useSession } from '../store/auth';
 import ConfirmDialog from './ConfirmDialog';
 import ThemeToggle from './ThemeToggle';
@@ -11,6 +12,18 @@ const TABS = [
 ];
 
 /**
+ * Back/forward icon buttons in the slim history row under the pill. Same
+ * 16px-in-a-rounded-box idiom as ui.ts's `iconBtn`, with full-round corners;
+ * the default 150ms color transition is already neutralised globally by the
+ * prefers-reduced-motion block in index.css. Disabled buttons drop to 40%
+ * opacity and keep their hit area so the affordance stays discoverable.
+ */
+const navBtnCls =
+  'tap-pad inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-dim ' +
+  'transition-colors hover:bg-surface-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50 ' +
+  'disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-dim';
+
+/**
  * The portal chrome: a pill-shaped bar floating at the top of the page —
  * brand left, the three product modes centred as a segmented control, tools
  * right. The tabs are the product's real modes (ingest, browse everything,
@@ -18,6 +31,7 @@ const TABS = [
  */
 export default function Header() {
   const navigate = useNavigate();
+  const nav = useNavHistory();
   const isSignedIn = useIsSignedIn();
   const session = useSession();
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -31,14 +45,17 @@ export default function Header() {
 
   return (
     <>
-    <header className="sticky top-0 z-30 bg-bg/85 px-4 pb-2 pt-3 backdrop-blur sm:px-6">
-      <div className="mx-auto flex max-w-content items-center gap-3 rounded-full border border-line bg-surface py-1.5 pl-4 pr-1.5 shadow-card">
+    <header className="sticky top-0 z-30 px-4 pb-2 pt-3 sm:px-6">
+      <div className="mx-auto flex max-w-content items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 shadow-card sm:gap-3 sm:px-4">
+        {/* Chevrons now live in a row under the pill, so the brand keeps its
+            full lockup at every width. min-w-0 + truncate only engages if the
+            pill genuinely runs out of room at ~360px. */}
         <Link
           to="/"
-          className="tap-pad flex shrink-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
+          className="tap-pad flex min-w-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
         >
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-7 w-7 rounded-full" />
-          <span className="font-display text-lg font-bold tracking-tight text-fg">RecSterio</span>
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-7 w-7 shrink-0 rounded-full" />
+          <span className="truncate font-display text-lg font-bold tracking-tight text-fg">RecSterio</span>
         </Link>
 
         <nav
@@ -96,6 +113,33 @@ export default function Header() {
         </div>
       </div>
 
+      {/* Browser-style history as a quiet row under the pill, above the
+          tablet sub-nav so the two rows never fight. The hook guards both
+          directions against walking out of the SPA's own entries, so a
+          disabled button is a truthful state, not a guess. */}
+      <div className="mx-auto mt-1.5 flex max-w-content items-center gap-1">
+        <button
+          type="button"
+          onClick={nav.goBack}
+          disabled={!nav.canBack}
+          title="Back"
+          aria-label="Back"
+          className={navBtnCls}
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={nav.goForward}
+          disabled={!nav.canForward}
+          title="Forward"
+          aria-label="Forward"
+          className={navBtnCls}
+        >
+          <ChevronRightIcon />
+        </button>
+      </div>
+
       {/* Tabs repeat below the fold line between sm and md only — below 640px
           the phone moves to the floating <BottomNav /> bar instead. */}
       <nav
@@ -134,6 +178,22 @@ export default function Header() {
       onCancel={() => setSignOutOpen(false)}
     />
     </>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
