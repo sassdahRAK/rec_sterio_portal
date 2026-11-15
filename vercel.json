@@ -7,7 +7,7 @@
     },
     {
       "source": "/api/:path*",
-      "destination": "https://silver-workshops-tribes-theater.trycloudflare.com/api/:path*"
+      "destination": "https://recsterio-api.13.140.58.119.sslip.io/api/:path*"
     }
   ]
 }
