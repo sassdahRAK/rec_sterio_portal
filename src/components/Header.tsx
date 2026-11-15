@@ -54,7 +54,7 @@ export default function Header() {
           to="/"
           className="tap-pad flex min-w-0 items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-strong/50"
         >
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-7 w-7 shrink-0 rounded-full" />
+          <img src={`${import.meta.env.BASE_URL}logo-64.png`} alt="" className="h-7 w-7 shrink-0 rounded-full" />
           <span className="truncate font-display text-lg font-bold tracking-tight text-fg">RecSterio</span>
         </Link>
 

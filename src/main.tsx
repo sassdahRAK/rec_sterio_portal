@@ -22,3 +22,17 @@ createRoot(container).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// The worker is installed only for built output. During `vite dev` it would
+// sit in front of the dev server and serve stale shells after every edit, so
+// registration stays off there. A failed install is never fatal: the app is
+// fully usable without it, offline support is an enhancement.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
+      scope: import.meta.env.BASE_URL,
+    }).catch(() => {
+      // An install failure must never break the app.
+    });
+  });
+}

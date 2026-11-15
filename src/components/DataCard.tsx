@@ -77,6 +77,11 @@ export default function DataCardView({
   const [overflowing, setOverflowing] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
+  // A frame can stop being servable at any time (expired CDN URL, offline, a
+  // 404 from the local thumbnail route). Once the <img> reports an error this
+  // flips and the card renders its normal no-thumbnail placeholder, so a broken
+  // image can never show. Reset when the card gets a different thumbnail.
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const transcriptRef = useRef<HTMLParagraphElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -108,6 +113,10 @@ export default function DataCardView({
     const el = transcriptRef.current;
     if (el) setOverflowing(el.scrollHeight > el.clientHeight + 1);
   }, [card.transcript_preview, expanded, editing]);
+
+  useEffect(() => {
+    setThumbnailFailed(false);
+  }, [card.thumbnail_url]);
 
   function stop() {
     if (audioRef.current) {
@@ -223,7 +232,7 @@ export default function DataCardView({
             poster={card.thumbnail_url ?? undefined}
             className="aspect-video w-full bg-black object-contain"
           />
-        ) : card.thumbnail_url ? (
+        ) : card.thumbnail_url && !thumbnailFailed ? (
           <button
             type="button"
             onClick={videoReady ? playVideo : undefined}
@@ -238,6 +247,7 @@ export default function DataCardView({
               alt={title}
               className="absolute inset-0 h-full w-full object-cover"
               loading="lazy"
+              onError={() => setThumbnailFailed(true)}
             />
             {videoReady ? (
               <span className="absolute inset-0 flex items-center justify-center">
