@@ -218,7 +218,14 @@ async function request<T>(
       if (ctrl.signal.aborted && !init.signal?.aborted) {
         throw new ApiError('timeout', 'The request timed out. Please try again.', 408);
       }
-      throw err;
+      // A caller abort is a page-driven cancellation the loader handles itself;
+      // anything else is a real transport failure and must not leak a TypeError.
+      if (init.signal?.aborted) throw err;
+      throw new ApiError(
+        'network_error',
+        'Could not reach the RecSterio API. Check that the backend is running.',
+        0,
+      );
     } finally {
       clearTimeout(timer);
       init.signal?.removeEventListener('abort', onCallerAbort);
@@ -228,7 +235,17 @@ async function request<T>(
     }
     if (!res.ok) return parseError(res);
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    try {
+      return (await res.json()) as T;
+    } catch {
+      // A 200 whose body is not JSON (a proxy or CDN interstitial page) would
+      // otherwise escape as a bare SyntaxError.
+      throw new ApiError(
+        'invalid_response',
+        'The API returned an unexpected response. Please try again.',
+        502,
+      );
+    }
   };
 
   if (!isGet) return run();
@@ -627,9 +644,28 @@ async function fetchBlob(path: string, authToken?: string | null): Promise<Blob>
   }
   const headers = new Headers();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const res = await fetch(`${API_BASE}${path}`, { headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { headers });
+  } catch {
+    throw new ApiError(
+      'network_error',
+      'Could not reach the RecSterio API. Check that the backend is running.',
+      0,
+    );
+  }
   if (!res.ok) return parseError(res);
-  return res.blob();
+  // No timeout here on purpose: this serves media and ZIP downloads, where a
+  // fixed cap would cut off large files. Only the read failure is normalised.
+  try {
+    return await res.blob();
+  } catch {
+    throw new ApiError(
+      'network_error',
+      'Could not reach the RecSterio API. Check that the backend is running.',
+      0,
+    );
+  }
 }
 
 /** Trigger a browser download of a blob. */
