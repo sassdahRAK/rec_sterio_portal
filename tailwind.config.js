@@ -37,10 +37,12 @@ export default {
         'warn-soft': 'rgb(var(--color-warn-soft) / <alpha-value>)',
       },
       fontFamily: {
-        // Space Grotesk is the display face (brand consistency with the
-        // console); Inter carries the interface. Both are already in the
-        // workspace, so no new font download is introduced.
-        display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Editorial serif for the portal's display voice; the console keeps
+        // Space Grotesk. Inter carries the interface.
+        display: ['Newsreader', 'ui-serif', 'Georgia', 'serif'],
+        // Khmer script gets its own capable face before any Latin-only stack,
+        // so Khmer code points never fall through to a system serif.
+        khmer: ['"Noto Sans Khmer"', '"Noto Sans"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import type { DataCard as DataCardModel } from '../api/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DataCard as DataCardModel, LanguageMix } from '../api/types';
 import {
   deleteVideo,
   downloadAudio,
@@ -198,6 +198,52 @@ export default function DataCardView({
 
   const title = card.title || card.folder_name || 'Untitled unit';
 
+  // Language mix: whole-transcript segment counts from the API are the source
+  // of truth. Only an older API that omits the field falls back to the `[xx]`
+  // tags in the preview, and that fallback cannot spot a mixed segment. `null`
+  // means the API has nothing to show, so it never triggers a guess.
+  //
+  // Code points are never counted: Whisper misdetects script (a Khmer-titled
+  // clip can carry Thai text), and the cards endpoint strips the preview tags,
+  // so neither text signal is trustworthy as the primary source.
+  const languageMix = useMemo(() => {
+    let counts: LanguageMix | null;
+    let basis: 'segments' | 'preview';
+    if (card.language_mix !== undefined) {
+      counts = card.language_mix;
+      basis = 'segments';
+    } else {
+      const tagged = { km: 0, km_en: 0, en: 0, und: 0 };
+      // `und` is three letters, so the tag capture spans two to three.
+      for (const match of (card.transcript_preview ?? '').matchAll(/\[([a-z]{2,3})\]/g)) {
+        const tag = match[1];
+        if (tag === 'km' || tag === 'en' || tag === 'und') tagged[tag] += 1;
+      }
+      counts = tagged;
+      basis = 'preview';
+    }
+    if (!counts) return null;
+    const total = counts.km + counts.km_en + counts.en + counts.und;
+    if (total === 0) return null;
+
+    // Only the buckets that actually occur appear, so a card with no Khmer
+    // says nothing about Khmer. Rail and text share the same order.
+    const visible: string[] = [];
+    const spoken: string[] = [];
+    const segments: { tone: string; share: number }[] = [];
+    const add = (label: string, count: number, tone: string, phrase: string) => {
+      if (!count) return;
+      visible.push(`${label}${count}`);
+      spoken.push(`${count} ${phrase}`);
+      segments.push({ tone, share: (count / total) * 100 });
+    };
+    add('KM ', counts.km, 'bg-accent', 'Khmer');
+    add('MIX ', counts.km_en, 'bg-accent-strong', 'mixed Khmer and English');
+    add('EN ', counts.en, 'bg-line', 'English');
+    add('UND ', counts.und, 'bg-warn', 'undetermined');
+    return { basis, visible: visible.join(' · '), spoken: spoken.join(', '), segments };
+  }, [card.language_mix, card.transcript_preview]);
+
   // min-w-0 lets the grid track shrink below the card's min-content width
   // (the truncated title is nowrap, so its min-content is the full title);
   // without it the card pushes 90px of horizontal scroll at 360px.
@@ -216,6 +262,36 @@ export default function DataCardView({
         </div>
         <Badge kind={card.badge} className="shrink-0" />
       </header>
+
+      {/* Signature element: the language mix, as a rail plus always-visible
+          text. Colour is never the only channel. */}
+      {languageMix ? (
+        <div className="flex flex-col gap-1.5">
+          <div
+            role="img"
+            aria-label={`${
+              languageMix.basis === 'segments' ? 'Transcript segments' : 'Transcript preview tags'
+            }: ${languageMix.spoken}`}
+            className="flex h-[3px] w-full overflow-hidden rounded-full bg-raised"
+          >
+            {languageMix.segments.map((segment) => (
+              <span
+                key={segment.tone}
+                className={`h-full ${segment.tone}`}
+                style={{ width: `${segment.share}%` }}
+              />
+            ))}
+          </div>
+          <span
+            className="text-2xs font-medium text-faint"
+            title={
+              languageMix.basis === 'segments' ? 'Segment languages, whole transcript' : undefined
+            }
+          >
+            {languageMix.visible}
+          </span>
+        </div>
+      ) : null}
 
       {/* Media: the video player once the bytes are on disk; a poster until then. */}
       <div className="overflow-hidden rounded-lg border border-line bg-surface-2">
@@ -329,7 +405,7 @@ export default function DataCardView({
         {editing ? (
           <div className="flex flex-col gap-2">
             <textarea
-              className={`${inputCls} min-h-[7rem] resize-y font-mono text-xs leading-relaxed`}
+              className={`${inputCls} min-h-[7rem] resize-y font-khmer text-xs leading-relaxed`}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               aria-label={`Edit transcript for ${title}`}
@@ -347,7 +423,7 @@ export default function DataCardView({
           <div className="flex flex-col gap-1">
             <p
               ref={transcriptRef}
-              className={`whitespace-pre-wrap rounded-md border border-line bg-surface-2 px-3 py-2 text-xs leading-relaxed text-dim${
+              className={`whitespace-pre-wrap rounded-md border border-line bg-surface-2 px-3 py-2 font-khmer text-xs leading-relaxed text-dim${
                 expanded ? '' : ' line-clamp-6'
               }`}
             >

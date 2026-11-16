@@ -10,6 +10,18 @@ export type Badge = 'raw' | 'cleaned';
 export type Visibility = 'public' | 'private';
 export type CloudBackend = 'google' | 'onedrive';
 
+/**
+ * Per-segment language counts from the backend. `km_en` counts segments that
+ * mix Khmer and English, and `null` on the card means the unit has no
+ * transcript or its transcript has no segments.
+ */
+export interface LanguageMix {
+  km: number;
+  km_en: number;
+  en: number;
+  und: number;
+}
+
 export interface DataCard {
   video_id: string;
   title: string | null;
@@ -29,6 +41,11 @@ export interface DataCard {
   badge: Badge;
   transcript_id?: string | null;
   transcript_preview?: string | null;
+  /**
+   * Segment language counts. Optional here because older payloads and the demo
+   * fixtures predate the field; the card falls back to preview tags then.
+   */
+  language_mix?: LanguageMix | null;
   audio_available: boolean;
   media_url: string;
   audio_url: string;
